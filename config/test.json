@@ -1,0 +1,96 @@
+{
+    "env_id": "MocRL-v0",
+    "train_hyp_params": {
+      "random_seed": 42,
+      "learning_rate": 5e-5,
+      "batch_size": 512,
+      "n_epochs": 10,
+      "num_envs": 128,
+      "n_steps": 512,
+      "ent_coef": 0.01,
+      "vf_coef": 0.5,
+      "gamma": 0.95,
+      "time_steps": 16384e4,
+      "save_freq": 12800,
+      "max_episode_steps": 128,
+      "max_evaluation_steps": 512,
+      "normalize_observation": true,
+      "normalize_reward": true
+    },
+    "environment_params": {
+      "robot_model": "Go1",
+      "use_model_based_control": true,
+      "reference_state_initialization": true,
+      "new_plan_on_perturbation": true,
+      "planning_time_horizon": 1.0,
+      "actuator_network_parameter_path": "",
+      "actuator_latency_buffer_size": 7,
+      "forward_speed_command": "random",
+      "turning_speed_command": "random",
+      "uneven_terrain": false,
+      "max_terrain_magnitude": 0.10,
+      "max_terrain_frequency": 0.9,
+      "max_gravity_tilt_angle": 0,
+      "perturbation_vel": true,
+      "perturbation_vel_window_timing": 40,
+      "perturbation_vel_window_width": 15,
+      "max_perturbation_vel": 1.5,
+      "perturbation_ang_vel": true,
+      "perturbation_ang_vel_window_timing": 80,
+      "perturbation_ang_vel_window_width": 15,
+      "max_perturbation_ang_vel": 1.5,
+      "gait_type_command": [
+        "stand", "trot", "pace", "gallop", "bound", "pronk"
+      ],
+      "base_height_command": 0.32,
+      "step_width_command": 0.9,
+      "swing_height_command": 0.08,
+      "control_rate": 50.0,
+      "simulation_rate": 200.0,
+      "motors_kp": 40.0,
+      "motors_kd": 1.0,
+      "obs_is_fullstate": false,
+      "feet_height_in_obs": false,
+      "last_action_in_obs": true,
+      "base_linear_velocity_noise_magnitude": 0.0,
+      "base_angular_velocity_noise_magnitude": 0.0,
+      "joint_speed_noise_magnitude": 0.0,
+      "friction_coefficient_min": 0.5,
+      "friction_coefficient_max": 1.25,
+      "saturate_max_torque": false
+    },
+    "reward_params": {
+      "base_height_sigma": 0.05,
+      "base_vel_sigma": [
+        0.3,
+        0.1,
+        0.3
+      ],
+      "base_yaw_rate_sigma": 0.5,
+      "feet_position_sigma": [
+        0.15,
+        0.025,
+        0.15
+      ],
+      "action_rate_sigma": 1.5,
+      "feet_slip_reward": true,
+      "feet_slip_sigma": 0.1,
+      "pitch_roll_reward": true,
+      "pitch_roll_sigma": 0.5
+    },
+    "model_params": {
+      "log_std_init": -1,
+      "activation_fn": "ELU",
+      "network_architecture": {
+        "pi": [
+          256,
+          256
+        ],
+        "vf": [
+          256,
+          256
+        ]
+      }
+    }
+  }
+  
