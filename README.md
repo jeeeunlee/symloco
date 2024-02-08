@@ -2,7 +2,10 @@
 Reinforcement Learning for SYMmetrical LOCOmotion 
 ------------
 # Install
-## if gpu exists and cuda installed check cuda version by 
+
+## Python Virtual Environment Setup
+Create the right version of python virtual environmnet corresponding to CUDA (e.g., CUDA 12.1 works well on python 3.11)
+If gpu exists and cuda installed check cuda version by 
 ```
 nvcc --version
 ```
@@ -14,8 +17,6 @@ cuda 12.1 example
 > Cuda compilation tools, release 12.1, V12.1.105
 > Build cuda_12.1.r12.1/compiler.32688072_0
 
-
-## Create the right version of python virtual environmnet corresponding to CUDA (e.g., CUDA 12.1 works well on python 3.11)
 ```
 conda create -n "symloco" python=3.11
 conda activate symloco
