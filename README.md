@@ -17,11 +17,12 @@ cuda 12.1 example:
 > Cuda compilation tools, release 12.1, V12.1.105
 > Build cuda_12.1.r12.1/compiler.32688072_0
 
-Then create python virtual env and install pytorch, stable-baseline3, gymnasium.
+Then, you can create python virtual env and install pytorch, stable-baseline3, gymnasium, etc.
 ```
-conda create -n "symloco" python=3.11
-conda activate symloco
+conda create -n "symloco" python=3.11 -y
+conda activate symloco -y
 conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=12.1 -c pytorch -c nvidia
 pip install stable-baselines3[extra]
-conda install conda-forge::gymnasium
+pip install gymnasium[mujoco]
+conda install -y -c conda-forge tensorboard
 ```
