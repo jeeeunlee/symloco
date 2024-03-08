@@ -23,110 +23,96 @@ class A1Env(MujocoEnv, utils.EzPickle):
     (connecting to the thighs) and feet (connecting to the shins).
 
     ## Action Space
-    The action space is a `Box(-1, 1, (6,), float32)`. An action represents the torques applied at the hinge joints.
+    The action space is a `Box(-1, 1, (12,), float32)`. An action represents the torques applied at the hinge joints.
 
-    | Num | Action                                  | Control Min | Control Max | Name (in corresponding XML file) | Joint | Unit         |
-    | --- | --------------------------------------- | ----------- | ----------- | -------------------------------- | ----- | ------------ |
-    | 0   | Torque applied on the back thigh rotor  | -1          | 1           | bthigh                           | hinge | torque (N m) |
-    | 1   | Torque applied on the back shin rotor   | -1          | 1           | bshin                            | hinge | torque (N m) |
-    | 2   | Torque applied on the back foot rotor   | -1          | 1           | bfoot                            | hinge | torque (N m) |
-    | 3   | Torque applied on the front thigh rotor | -1          | 1           | fthigh                           | hinge | torque (N m) |
-    | 4   | Torque applied on the front shin rotor  | -1          | 1           | fshin                            | hinge | torque (N m) |
-    | 5   | Torque applied on the front foot rotor  | -1          | 1           | ffoot                            | hinge | torque (N m) |
-
+    | Num | Action                             | Ctrl Min | Ctrl Max | Name (in XML ) | Joint     | Unit        |
+    | --- | ---------------------------------- | -------- | -------- | -------------- | --------- | ----------- |
+    | 0   | Pos Cmd on Front Right hip joint   |-0.802851 | 0.802851 | FR_hip_joint   | abduction | angle (rad) |
+    | 1   | Pos Cmd on Front Right thigh joint | -1.0472  | 4.18879  | FR_thigh_joint | hip       | angle (rad) |
+    | 2   | Pos Cmd on Front Right calf joint  | -2.69653 |-0.916298 | FR_calf_joint  | knee      | angle (rad) |
+    | 3   | Pos Cmd on Front Left hip joint    |-0.802851 | 0.802851 | FL_hip_joint   | abduction | angle (rad) |
+    | 4   | Pos Cmd on Front Left thigh joint  | -1.0472  | 4.18879  | FL_thigh_joint | hip       | angle (rad) |
+    | 5   | Pos Cmd on Front Left calf joint   | -2.69653 |-0.916298 | FL_calf_joint  | knee      | angle (rad) |
+    | 6   | Pos Cmd on Rear Right hip joint    |-0.802851 | 0.802851 | RR_hip_joint   | abduction | angle (rad) |
+    | 7   | Pos Cmd on Rear Right thigh joint  | -1.0472  | 4.18879  | RR_thigh_joint | hip       | angle (rad) |
+    | 8   | Pos Cmd on Rear Right calf joint   | -2.69653 |-0.916298 | RR_calf_joint  | knee      | angle (rad) |
+    | 9   | Pos Cmd on Rear Left hip joint     |-0.802851 | 0.802851 | RL_hip_joint   | abduction | angle (rad) |
+    | 10  | Pos Cmd on Rear Left thigh joint   | -1.0472  | 4.18879  | RL_thigh_joint | hip       | angle (rad) |
+    | 11  | Pos Cmd on Rear Left calf joint    | -2.69653 |-0.916298 | RL_calf_joint  | knee      | angle (rad) |
 
     ## Observation Space
     Observations consist of positional values of different body parts of the
     cheetah, followed by the velocities of those individual parts (their derivatives) with all the positions ordered before all the velocities.
 
-    By default, observations do not include the cheetah's `rootx`. It may
-    be included by passing `exclude_current_positions_from_observation=False` during construction.
-    In that case, the observation space will be a `Box(-Inf, Inf, (18,), float64)` where the first element
-    represents the `rootx`.
-    Regardless of whether `exclude_current_positions_from_observation` was set to true or false, the
-    will be returned in `info` with key `"x_position"`.
-
     However, by default, the observation is a `Box(-Inf, Inf, (17,), float64)` where the elements correspond to the following:
 
-    | Num | Observation                          | Min  | Max | Name (in corresponding XML file) | Joint | Unit                     |
-    | --- | ------------------------------------ | ---- | --- | -------------------------------- | ----- | ------------------------ |
-    | 0   | z-coordinate of the front tip        | -Inf | Inf | rootz                            | slide | position (m)             |
-    | 1   | angle of the front tip               | -Inf | Inf | rooty                            | hinge | angle (rad)              |
-    | 2   | angle of the second rotor            | -Inf | Inf | bthigh                           | hinge | angle (rad)              |
-    | 3   | angle of the second rotor            | -Inf | Inf | bshin                            | hinge | angle (rad)              |
-    | 4   | velocity of the tip along the x-axis | -Inf | Inf | bfoot                            | hinge | angle (rad)              |
-    | 5   | velocity of the tip along the y-axis | -Inf | Inf | fthigh                           | hinge | angle (rad)              |
-    | 6   | angular velocity of front tip        | -Inf | Inf | fshin                            | hinge | angle (rad)              |
-    | 7   | angular velocity of second rotor     | -Inf | Inf | ffoot                            | hinge | angle (rad)              |
-    | 8   | x-coordinate of the front tip        | -Inf | Inf | rootx                            | slide | velocity (m/s)           |
-    | 9   | y-coordinate of the front tip        | -Inf | Inf | rootz                            | slide | velocity (m/s)           |
-    | 10  | angle of the front tip               | -Inf | Inf | rooty                            | hinge | angular velocity (rad/s) |
-    | 11  | angle of the second rotor            | -Inf | Inf | bthigh                           | hinge | angular velocity (rad/s) |
-    | 12  | angle of the second rotor            | -Inf | Inf | bshin                            | hinge | angular velocity (rad/s) |
-    | 13  | velocity of the tip along the x-axis | -Inf | Inf | bfoot                            | hinge | angular velocity (rad/s) |
-    | 14  | velocity of the tip along the y-axis | -Inf | Inf | fthigh                           | hinge | angular velocity (rad/s) |
-    | 15  | angular velocity of front tip        | -Inf | Inf | fshin                            | hinge | angular velocity (rad/s) |
-    | 16  | angular velocity of second rotor     | -Inf | Inf | ffoot                            | hinge | angular velocity (rad/s) |
-    | excluded |  x-coordinate of the front tip  | -Inf | Inf | rootx                            | slide | position (m)             |
+    | Num | Observation         | Min      | Max      | Name (in XML)  | Joint     | Unit        |
+    | --- | ------------------- | -------- | -------- | -------------- | --------- | ----------- |
+    | 0   | angle of FR_hip     |-0.802851 | 0.802851 | FR_hip_joint   | abduction | angle (rad) |
+    | 1   | angle of FR_thigh   | -1.0472  | 4.18879  | FR_thigh_joint | hip       | angle (rad) |
+    | 2   | angle of FR_calf    | -2.69653 |-0.916298 | FR_calf_joint  | knee      | angle (rad) |
+    | 3   | angle of FL_hip     |-0.802851 | 0.802851 | FL_hip_joint   | abduction | angle (rad) |
+    | 4   | angle of FL_thigh   | -1.0472  | 4.18879  | FL_thigh_joint | hip       | angle (rad) |
+    | 5   | angle of FL_calf    | -2.69653 |-0.916298 | FL_calf_joint  | knee      | angle (rad) |
+    | 6   | angle of RR_hip     |-0.802851 | 0.802851 | RR_hip_joint   | abduction | angle (rad) |
+    | 7   | angle of RR_thigh   | -1.0472  | 4.18879  | RR_thigh_joint | hip       | angle (rad) |
+    | 8   | angle of RR_calf    | -2.69653 |-0.916298 | RR_calf_joint  | knee      | angle (rad) |
+    | 9   | angle of RL_hip     |-0.802851 | 0.802851 | RL_hip_joint   | abduction | angle (rad) |
+    | 10  | angle of RL_thigh   | -1.0472  | 4.18879  | RL_thigh_joint | hip       | angle (rad) |
+    | 11  | angle of RL_calf    | -2.69653 |-0.916298 | RL_calf_joint  | knee      | angle (rad) |
+    | 12  | ang vel of FR_hip   |   -inf   |    inf   | FR_hip_joint   | abduction | vel (rad/s) |
+    | 13  | ang vel of FR_thigh |   -inf   |    inf   | FR_thigh_joint | hip       | vel (rad/s) |
+    | 14  | ang vel of FR_calf  |   -inf   |    inf   | FR_calf_joint  | knee      | vel (rad/s) |
+    | 15  | ang vel of FL_hip   |   -inf   |    inf   | FL_hip_joint   | abduction | vel (rad/s) |
+    | 16  | ang vel of FL_thigh |   -inf   |    inf   | FL_thigh_joint | hip       | vel (rad/s) |
+    | 17  | ang vel of FL_calf  |   -inf   |    inf   | FL_calf_joint  | knee      | vel (rad/s) |
+    | 18  | ang vel of RR_hip   |   -inf   |    inf   | RR_hip_joint   | abduction | vel (rad/s) |
+    | 19  | ang vel of RR_thigh |   -inf   |    inf   | RR_thigh_joint | hip       | vel (rad/s) |
+    | 20  | ang vel of RR_calf  |   -inf   |    inf   | RR_calf_joint  | knee      | vel (rad/s) |
+    | 21  | ang vel of RL_hip   |   -inf   |    inf   | RL_hip_joint   | abduction | vel (rad/s) |
+    | 22  | ang vel of RL_thigh |   -inf   |    inf   | RL_thigh_joint | hip       | vel (rad/s) |
+    | 23  | ang vel of RL_calf  |   -inf   |    inf   | RL_calf_joint  | knee      | vel (rad/s) |
+    | 24-6| Accleration in IMU  |   -inf   |    inf   | Body_Acc       | sensor    | acc (m/s2)  |
+    | 27-9| Gyroscope in IMU    |   -inf   |    inf   | Body_Gyro      | sensor    | vel (rad/s) |
+    | 30-2| Position in IMU     |   -inf   |    inf   | Body_Pos       | sensor    | pos (m)     |
+    | 33-6| Quaternion in IMU   |   -inf   |    inf   | Body_Quat      | sensor    | quat        |
 
+    
     ## Rewards
-    The reward consists of two parts:
-    - *forward_reward*: A reward of moving forward which is measured
-    as *`forward_reward_weight` * (x-coordinate before action - x-coordinate after action)/dt*. *dt* is
-    the time between actions and is dependent on the frame_skip parameter
-    (fixed to 5), where the frametime is 0.01 - making the
-    default *dt = 5 * 0.01 = 0.05*. This reward would be positive if the cheetah
-    runs forward (right).
-    - *ctrl_cost*: A cost for penalising the cheetah if it takes
-    actions that are too large. It is measured as *`ctrl_cost_weight` *
-    sum(action<sup>2</sup>)* where *`ctrl_cost_weight`* is a parameter set for the
-    control and has a default value of 0.1
+    reward = forward_reward - ctrl_cost 
+    - *forward_reward*: A reward of moving forward 
+                        = forward_reward_weight * ( x[t+1] - x[t] ) / dt
+    default dt = 5(frame_skip) * 0.01(frametime) = 0.05. 
+    - *ctrl_cost*: A cost for penalising large actions 
+        = ctrl_cost_weight * sum(action^2)
+    default ctrl_cost_weight = 0.1
 
-    The total reward returned is ***reward*** *=* *forward_reward - ctrl_cost* and `info` will also contain the individual reward terms
-
-    ## Starting State
-    All observations start in state (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,) with a noise added to the
-    initial state for stochasticity. As seen before, the first 8 values in the
-    state are positional and the last 9 values are velocity. A uniform noise in
-    the range of [-`reset_noise_scale`, `reset_noise_scale`] is added to the positional values while a standard
-    normal noise with a mean of 0 and standard deviation of `reset_noise_scale` is added to the
-    initial velocity values of all zeros.
+    ## Noise
+    inital state: [0.   0.   0.43    pos
+                  1.   0.   0.   0. quat
+                  0.   0.   0.      FR
+                  0.   0.   0.      FL
+                  0.   0.   0.      RR
+                  0.   0.   0. ]    RL
+    inital observations : [0*12, 0*12, 0,0,-9.8, 0,0,0, 0,0,0.43, 1,0,0,0]
+    12 positions with a noise in the range of [-`reset_noise_scale`, `reset_noise_scale`] 
+    12 velocities with a standard normal noise with a mean of 0 and standard deviation of `reset_noise_scale` 
+    13 for IMU
 
     ## Episode End
     The episode truncates when the episode length is greater than 1000.
 
     ## Arguments
-
-    No additional arguments are currently supported in v2 and lower.
-
     ```python
     import gymnasium as gym
-    env = gym.make('HalfCheetah-v2')
+    env = gym.make('unitreeA1-v1', ctrl_cost_weight=, ...)
     ```
-
-    v3 and v4 take `gymnasium.make` kwargs such as `xml_file`, `ctrl_cost_weight`, `reset_noise_scale`, etc.
-
-    ```python
-    import gymnasium as gym
-    env = gym.make('HalfCheetah-v4', ctrl_cost_weight=0.1, ....)
-    ```
-
-    | Parameter                                    | Type      | Default              | Description                                                                                                                                                       |
-    | -------------------------------------------- | --------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | `xml_file`                                   | **str**   | `"half_cheetah.xml"` | Path to a MuJoCo model                                                                                                                                            |
-    | `forward_reward_weight`                      | **float** | `1.0`                | Weight for _forward_reward_ term (see section on reward)                                                                                                          |
-    | `ctrl_cost_weight`                           | **float** | `0.1`                | Weight for _ctrl_cost_ weight (see section on reward)                                                                                                             |
-    | `reset_noise_scale`                          | **float** | `0.1`                | Scale of random perturbations of initial position and velocity (see section on Starting State)                                                                    |
-    | `exclude_current_positions_from_observation` | **bool**  | `True`               | Whether or not to omit the x-coordinate from observations. Excluding the position can serve as an inductive bias to induce position-agnostic behavior in policies |
-
-    ## Version History
-
-    * v4: All MuJoCo environments now use the MuJoCo bindings in mujoco >= 2.1.3
-    * v3: Support for `gymnasium.make` kwargs such as `xml_file`, `ctrl_cost_weight`, `reset_noise_scale`, etc. rgb rendering comes from tracking camera (so agent does not run away from screen)
-    * v2: All continuous control environments now use mujoco-py >= 1.50
-    * v1: max_time_steps raised to 1000 for robot based tasks. Added reward_threshold to environments.
-    * v0: Initial versions release (1.0.0)
+    | Parameter                 | Type      | Default              | Description                                                                                                                                                       |
+    | ------------------------- | --------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | `xml_file`                | **str**   | `"half_cheetah.xml"` | Path to a MuJoCo model                                                                                                                                            |
+    | `forward_reward_weight`   | **float** | `1.0`                | Weight for _forward_reward_ term (see section on reward)                                                                                                          |
+    | `ctrl_cost_weight`        | **float** | `0.1`                | Weight for _ctrl_cost_ weight (see section on reward)                                                                                                             |
+    | `reset_noise_scale`       | **float** | `0.1`                | Scale of random perturbations of initial position and velocity (see section on Starting State)                                                                    |
     """
 
     metadata = {
@@ -140,44 +126,33 @@ class A1Env(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
+        xml_file="unitree_a1/a1.xml",
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.1,
         reset_noise_scale=0.1,
-        exclude_current_positions_from_observation=True,
         **kwargs,
     ):
         utils.EzPickle.__init__(
             self,
+            xml_file,
             forward_reward_weight,
             ctrl_cost_weight,
             reset_noise_scale,
-            exclude_current_positions_from_observation,
             **kwargs,
         )
 
         self._forward_reward_weight = forward_reward_weight
-
         self._ctrl_cost_weight = ctrl_cost_weight
-
         self._reset_noise_scale = reset_noise_scale
 
-        self._exclude_current_positions_from_observation = (
-            exclude_current_positions_from_observation
+        observation_space = Box(
+            low=-np.inf, high=np.inf, shape=(37,), dtype=np.float64
         )
-
-        if exclude_current_positions_from_observation:
-            observation_space = Box(
-                low=-np.inf, high=np.inf, shape=(17,), dtype=np.float64
-            )
-        else:
-            observation_space = Box(
-                low=-np.inf, high=np.inf, shape=(18,), dtype=np.float64
-            )
 
         MujocoEnv.__init__(
             self,
-            "unitree_a1/a1.xml",
-            5,
+            model_path=xml_file,
+            frame_skip=5,
             observation_space=observation_space,
             default_camera_config=DEFAULT_CAMERA_CONFIG,
             **kwargs,
@@ -210,15 +185,20 @@ class A1Env(MujocoEnv, utils.EzPickle):
         if self.render_mode == "human":
             self.render()
         return observation, reward, terminated, False, info
+    
+    def _get_sensor_data(self):
+        return self.data.sensordata
 
     def _get_obs(self):
+        # observation = self.data.sensordata
         position = self.data.qpos.flat.copy()
         velocity = self.data.qvel.flat.copy()
-
-        if self._exclude_current_positions_from_observation:
-            position = position[1:]
-
-        observation = np.concatenate((position, velocity)).ravel()
+        sensordata = self.data.sensordata
+        # removing floating base states and add imu data
+        qpos = position[7:]
+        qvel = velocity[6:]
+        imu = sensordata[24:]
+        observation = np.concatenate((qpos, qvel, imu)).ravel()
         return observation
 
     def reset_model(self):
