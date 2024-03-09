@@ -1,22 +1,21 @@
 import mujoco
 import time
 import numpy as np
+from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 
-from mujoco_py import MjSim
-from mujoco_py import MjViewer
-
+        
+DEFAULT_CAMERA_CONFIG = {
+    "distance": 4.0,
+}
 FREQ = 200 
-model = mujoco.MjModel.from_xml_path("src/mygym/envs/mujoco/unitree_a1/a1.xml")
+xml_path = "src/mygym/envs/mujoco/unitree_a1/scene.xml"
+model = mujoco.MjModel.from_xml_path(xml_path)
 data = mujoco.MjData(model)
-sim = MjSim(model)
-viewer = MjViewer(sim)
-viewer._render_every_frame = True
-
-# for n in model.names:
-#     print(n)
+mujoco_renderer = MujocoRenderer(
+    model, data, DEFAULT_CAMERA_CONFIG)
 
 
-for t in range(5):
+for t in range(1000):
     
     # print(f"position: {len(data.qpos)}")
     # print(data.qpos)
@@ -40,11 +39,8 @@ for t in range(5):
 
     print(data.sensordata)
     print(concat)
-    # mujoco.mj_step(model, data)
-    
-    # sim.forward()
-    # time.sleep(1 / FREQ)
-    # viewer.render() 
+    mujoco.mj_step(model, data)
+    mujoco_renderer.render("human")
 
 
 
