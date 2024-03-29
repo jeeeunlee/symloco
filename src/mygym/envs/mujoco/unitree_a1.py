@@ -199,7 +199,7 @@ class A1Env(MujocoEnv, utils.EzPickle):
         balance_reward = self.balance_reward()
 
         observation = self._get_obs()
-        reward = balance_reward + forward_reward - ctrl_cost
+        reward = - balance_reward + forward_reward - ctrl_cost
         terminated = False
         info = {
             "x_position": x_position_after,
