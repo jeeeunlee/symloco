@@ -1,3 +1,12 @@
+import os
+# add path home/jelee/my_ws/RL/symloco/src
+dirname = os.path.dirname(__file__)
+for i in range(3):
+    path = os.path.abspath(dirname)
+    dirname = os.path.dirname(path)
+# print(dirname)
+UNITREE_A1_PATH = os.path.join(dirname, "mygym/envs/mujoco/unitree_a1/scene.xml")
+
 import numpy as np
 
 from gymnasium import utils
@@ -121,12 +130,13 @@ class A1Env(MujocoEnv, utils.EzPickle):
             "rgb_array",
             "depth_array",
         ],
-        "render_fps": 20,
+        "render_fps": 100, #20
     }
 
     def __init__(
         self,
-        xml_file="unitree_a1/a1.xml",
+        xml_file=UNITREE_A1_PATH,
+        balance_reward_weight=10.0,
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.1,
         reset_noise_scale=0.1,
@@ -135,14 +145,17 @@ class A1Env(MujocoEnv, utils.EzPickle):
         utils.EzPickle.__init__(
             self,
             xml_file,
+            balance_reward_weight,
             forward_reward_weight,
             ctrl_cost_weight,
             reset_noise_scale,
             **kwargs,
         )
 
+        self._balance_reward_weight = balance_reward_weight
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
+        
         self._reset_noise_scale = reset_noise_scale
 
         observation_space = Box(
@@ -161,25 +174,38 @@ class A1Env(MujocoEnv, utils.EzPickle):
     def control_cost(self, action):
         control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
         return control_cost
+    
+    def forward_reward(self, x_velocity):
+        forward_reward = self._forward_reward_weight * x_velocity
+        return forward_reward
+    
+    def balance_reward(self):
+        # todo: use sensordata
+        rx = self.data.qpos[3]
+        ry = self.data.qpos[4]
+        rz = self.data.qpos[5]
+        dz = 5*(0.43 - self.data.qpos[2])
+        balance_reward = self._balance_reward_weight * np.sum(np.square([rx,ry,rz,dz]))
+        return balance_reward        
 
-    def step(self, action):
+    def step(self, actions):
         x_position_before = self.data.qpos[0]
-        self.do_simulation(action, self.frame_skip)
+        self.do_simulation(actions, self.frame_skip)
         x_position_after = self.data.qpos[0]
         x_velocity = (x_position_after - x_position_before) / self.dt
 
-        ctrl_cost = self.control_cost(action)
-
-        forward_reward = self._forward_reward_weight * x_velocity
+        ctrl_cost = self.control_cost(actions)
+        forward_reward = self.forward_reward(x_velocity)
+        balance_reward = self.balance_reward()
 
         observation = self._get_obs()
-        reward = forward_reward - ctrl_cost
+        reward = balance_reward + forward_reward - ctrl_cost
         terminated = False
         info = {
             "x_position": x_position_after,
             "x_velocity": x_velocity,
             "reward_run": forward_reward,
-            "reward_ctrl": -ctrl_cost,
+            "reward_ctrl": -ctrl_cost,        
         }
 
         if self.render_mode == "human":

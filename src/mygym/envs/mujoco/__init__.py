@@ -1,7 +1,10 @@
+import os
+import sys
+cwd=os.getcwd()
+sys.path.append(os.path.join(cwd,"src"))
+
 from gymnasium.envs.mujoco.mujoco_env import MujocoEnv, MuJocoPyEnv  # isort:skip
-
 from mygym.envs.mujoco.unitree_a1 import A1Env
-
 from gymnasium.envs.registration import register
 
 
