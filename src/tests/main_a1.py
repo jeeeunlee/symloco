@@ -59,7 +59,7 @@ def test(env:VecEnv,
     n_envs = env.num_envs
     extra_steps = [500]*n_envs
     while True:
-        action, _states = model.predict(obs)
+        action, states = model.predict(obs)
         obs, rewards, dones, info = env.step(action)        
         env.render("human")
         for i, done in enumerate(dones):
@@ -73,7 +73,5 @@ if __name__ == '__main__':
 
     # gymenv = gym.make('Humanoid-v4', render_mode='human')
     gymenv = make_vec_env('A1-v1', n_envs=4)
-    # train(gymenv, 'SAC', modelname='A1')
-
-    
-    test(gymenv, sb3_algo='SAC', path_to_model='models/A1/SAC_1665000.zip')
+    # train(gymenv, 'SAC', modelname='A1-exprewards')
+    test(gymenv, sb3_algo='SAC', path_to_model='models/A1-exprewards/SAC_265000.zip')

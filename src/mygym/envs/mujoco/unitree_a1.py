@@ -8,6 +8,7 @@ for i in range(3):
 UNITREE_A1_PATH = os.path.join(dirname, "mygym/envs/mujoco/unitree_a1/scene.xml")
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
@@ -97,13 +98,13 @@ class A1Env(MujocoEnv, utils.EzPickle):
     default ctrl_cost_weight = 0.1
 
     ## Noise
-    inital state: [0.   0.   0.43    pos
+    inital state: [0.   0.   0.29    pos
                   1.   0.   0.   0. quat
                   0.   0.   0.      FR
                   0.   0.   0.      FL
                   0.   0.   0.      RR
                   0.   0.   0. ]    RL
-    inital observations : [0*12, 0*12, 0,0,-9.8, 0,0,0, 0,0,0.43, 1,0,0,0]
+    inital observations : [0*12, 0*12, 0,0,-9.8, 0,0,0, 0,0,0.29, 1,0,0,0]
     12 positions with a noise in the range of [-`reset_noise_scale`, `reset_noise_scale`] 
     12 velocities with a standard normal noise with a mean of 0 and standard deviation of `reset_noise_scale` 
     13 for IMU
@@ -114,7 +115,7 @@ class A1Env(MujocoEnv, utils.EzPickle):
     ## Arguments
     ```python
     import gymnasium as gym
-    env = gym.make('unitreeA1-v1', ctrl_cost_weight=, ...)
+    env = gym.make('A1-v1', ctrl_cost_weight=, ...)
     ```
     | Parameter                 | Type      | Default              | Description                                                                                                                                                       |
     | ------------------------- | --------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -136,9 +137,9 @@ class A1Env(MujocoEnv, utils.EzPickle):
     def __init__(
         self,
         xml_file=UNITREE_A1_PATH,
-        balance_reward_weight=10.0,
+        balance_reward_weight=5.0,
         forward_reward_weight=1.0,
-        ctrl_cost_weight=0.1,
+        ctrl_cost_weight=0.01,
         reset_noise_scale=0.1,
         **kwargs,
     ):
@@ -170,36 +171,56 @@ class A1Env(MujocoEnv, utils.EzPickle):
             default_camera_config=DEFAULT_CAMERA_CONFIG,
             **kwargs,
         )
+        # reset action_space automatically set from MujocoEnv.__init__
+        self.action_space = Box(
+            low=-20.0, high=20.0, shape=(12,), dtype=np.float64
+        )
 
     def control_cost(self, action):
-        control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
+        # control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
+        control_cost = np.exp( - self._ctrl_cost_weight * np.linalg.norm(action) )
         return control_cost
     
     def forward_reward(self, x_velocity):
-        forward_reward = self._forward_reward_weight * x_velocity
+        # forward_reward = self._forward_reward_weight * x_velocity
+        forward_reward = np.exp( self._forward_reward_weight * x_velocity )
         return forward_reward
     
     def balance_reward(self):
         # todo: use sensordata
-        rx = self.data.qpos[3]
-        ry = self.data.qpos[4]
-        rz = self.data.qpos[5]
-        dz = 5*(0.43 - self.data.qpos[2])
-        balance_reward = self._balance_reward_weight * np.sum(np.square([rx,ry,rz,dz]))
+        qw = self.data.qpos[3]
+        qx = self.data.qpos[4]
+        qy = self.data.qpos[5]
+        qz = self.data.qpos[6]
+        quat = [qx,qy,qz,qw]
+        r = R.from_quat(quat).as_rotvec()
+        dr = np.linalg.norm(r)
+        dz = (0.29 - self.data.qpos[2])
+        # balance_reward = self._balance_reward_weight * np.sum(np.square([rx,ry,rz,dz]))
+        balance_reward = np.exp( - self._balance_reward_weight*np.linalg.norm([dr,dz]) )
         return balance_reward        
 
     def step(self, actions):
+        # CHANGED: assume actions are pos change instead of pos itself
+        observation = self._get_obs()
+        despos = observation[:12] + actions*self.dt
+        # print(actions)
         x_position_before = self.data.qpos[0]
-        self.do_simulation(actions, self.frame_skip)
+        self.do_simulation(despos, self.frame_skip)
         x_position_after = self.data.qpos[0]
         x_velocity = (x_position_after - x_position_before) / self.dt
 
         ctrl_cost = self.control_cost(actions)
         forward_reward = self.forward_reward(x_velocity)
         balance_reward = self.balance_reward()
+        # TODO: add safety reward
+        # penalyzing position out of limit/near singularity: self.safety_reward()
+        # add smooth control reward
+        #  
 
         observation = self._get_obs()
-        reward = - balance_reward + forward_reward - ctrl_cost
+        # reward = - balance_reward + forward_reward - ctrl_cost
+        reward = balance_reward*forward_reward*ctrl_cost
         terminated = False
         info = {
             "x_position": x_position_after,
@@ -210,6 +231,23 @@ class A1Env(MujocoEnv, utils.EzPickle):
 
         if self.render_mode == "human":
             self.render()
+
+        # add terminated condition
+        qw = self.data.qpos[3]
+        qx = self.data.qpos[4]
+        qy = self.data.qpos[5]
+        qz = self.data.qpos[6]
+        quat = [qx,qy,qz,qw]
+        r = R.from_quat(quat).as_rotvec()
+        dr = np.linalg.norm(r)
+        dz = np.abs(0.29 - self.data.qpos[2])
+        if(dz>0.2): 
+            terminated = True
+            print("dz = ", dz)
+        if(dr>0.8): 
+            terminated = True
+            print("dr = ", r)
+
         return observation, reward, terminated, False, info
     
     def _get_sensor_data(self):
@@ -231,7 +269,9 @@ class A1Env(MujocoEnv, utils.EzPickle):
         noise_low = -self._reset_noise_scale
         noise_high = self._reset_noise_scale
 
-        qpos = self.init_qpos + self.np_random.uniform(
+        init_qpos = [0,0,0.29,1,0,0,0, 0.3,0.8,-1.6, 0.3,0.8,-1.6, 0.3,0.8,-1.6, 0.3,0.8,-1.6]
+
+        qpos = init_qpos + self.np_random.uniform(
             low=noise_low, high=noise_high, size=self.model.nq
         )
         qvel = (
