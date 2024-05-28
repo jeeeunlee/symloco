@@ -25,4 +25,5 @@ conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=
 pip install stable-baselines3[extra]
 pip install gymnasium[mujoco]
 conda install -y -c conda-forge tensorboard
+conda install -y -c conda-forge scipy
 ```
