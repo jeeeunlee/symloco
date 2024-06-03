@@ -238,12 +238,7 @@ class A1Env(MujocoEnv, utils.EzPickle):
 
 
     def smooth_control_reward(self, actions):
-        #Goal: Encourage the robot to take smooth and continuous motions and avoid sudden large motion changes.
-        #Records the actions (movements) of the current step.
-            #Calculate the differences between the actions of the current step and the actions of the previous step.
-            # Use these differences to calculate a penalty value (usually the sum of the squares of the differences).
-            # Convert this penalty value into a reward, using a negative exponential function to ensure that the reward value is between 0 and 1, and that the greater the difference, the lower the reward.
-
+        
         smoothness_penalty = np.sum(np.square(actions - self.prev_actions))
         self.prev_actions = actions
         smooth_reward = np.exp(-smoothness_penalty*self._smooth_reward_weight)
