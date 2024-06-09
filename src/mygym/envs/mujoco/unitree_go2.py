@@ -238,13 +238,27 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         return self.data.sensordata
 
     def _get_obs(self):
-        position = self.data.qpos.flat.copy()
-        velocity = self.data.qvel.flat.copy()
-        sensordata = self.data.sensordata
-        qpos = position[7:]
-        qvel = velocity[6:]
-        imu = sensordata[24:]
-        observation = np.concatenate((qpos, qvel, imu)).ravel()
+        position = self.data.qpos.flat.copy()#position shape: (19,)
+        velocity = self.data.qvel.flat.copy()#velocity shape: (18,)
+        sensordata = self.data.sensordata#sensordata shape: (52,)
+        # num_sensors = self.model.nsensor
+        # sensor_names = self.model.sensor_names
+        # for i in range(num_sensors):
+        #     sensor_id = self.model.sensor_id[i]
+        #     sensor_name = self.model.sensor_id2name(sensor_id)
+        #     print(f"Sensor {i}: Name = {sensor_name}, ID = {sensor_id}")
+
+        qpos = position[7:]#qpos shape: (12,)
+        qvel = velocity[6:]#qvel shape: (12,)
+        imu = sensordata[36:49]#imu shape: (13,)
+
+        # reorder
+        reordered_imu = np.concatenate((imu[7:10], imu[4:7], imu[10:], imu[:4]))
+
+        # print("Original array:", imu)
+        # print("Reordered array:", reordered_imu)
+        # print(f"imudata:{imu.shape}")
+        observation = np.concatenate((qpos, qvel, reordered_imu)).ravel()
         return observation
 
     def reset_model(self):
