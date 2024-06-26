@@ -166,11 +166,9 @@ class A1Env(MujocoEnv, utils.EzPickle):
         # self.prev_actions = np.zeros(12)
         self.prev_joint_velocities = np.zeros(12) 
         self.prev_joint_accelerations = np.zeros(12)
-      
   
-
         observation_space = Box(
-            low=-np.inf, high=np.inf, shape=(37,), dtype=np.float64
+            low=-np.inf, high=np.inf, shape=(61,), dtype=np.float64
         )
         #if this is necessary to define the observation space limits of segments？
         MujocoEnv.__init__(
@@ -256,18 +254,19 @@ class A1Env(MujocoEnv, utils.EzPickle):
     def smooth_control_reward(self, current_joint_velocities):
         # print(f"self.current_joint_velocities:{current_joint_velocities}")      
         current_joint_accelerations = (np.array(current_joint_velocities) - np.array(self.prev_joint_velocities))*5
-      
+        # print(f"current_joint_accelerations:{current_joint_accelerations}")      
+
 
         # calculate the change of all joints acceleration
         acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
-        # print(f"acceleration_changes:{acceleration_changes}")
         self.prev_joint_accelerations = current_joint_accelerations
-        # smoothness_penalty = np.sum(np.square(acceleration_changes))
-        smoothness_penalty = np.sum(acceleration_changes)
+        smoothness_penalty = np.sum(np.square(acceleration_changes))
+        # smoothness_penalty = np.sum(acceleration_changes)
         # print(f"smoothness_penalty:{smoothness_penalty}")
         smooth_reward = np.exp(-smoothness_penalty * self._smooth_reward_weight)
         # print(f"smooth_reward:{smooth_reward}")
         return smooth_reward
+
     
     def step(self, actions):
         # CHANGED: assume actions are pos change instead of pos itself
@@ -284,28 +283,18 @@ class A1Env(MujocoEnv, utils.EzPickle):
         balance_reward = self.balance_reward()
         safety_reward = self.safety_reward()
         # smooth_control_reward = self.smooth_control_reward(actions)
-        print("pre1",self.prev_torques)
-
-        current_torques = self.data.qfrc_actuator[:12]
-        print("current",current_torques)
-
-        smooth_control_reward = self.smooth_control_reward(current_torques)
-
-
-    
+       
         observation = self._get_obs()
-        # current_joint_velocities = self.data.qvel[:12]
-        # # print(f"current_joint_velocities:{current_joint_velocities}")
+        current_joint_velocities = self.data.qvel[:12]
+        # print(f"current_joint_velocities:{current_joint_velocities}")
 
-        # smooth_control_reward = self.smooth_control_reward(current_joint_velocities)
-        # self.prev_joint_velocities = current_joint_velocities
-        # # print(f"self.prev_joint_velocities:{self.prev_joint_velocities}")
+        smooth_control_reward = self.smooth_control_reward(current_joint_velocities)
+        self.prev_joint_velocities = current_joint_velocities
+        # print(f"self.prev_joint_velocities:{self.prev_joint_velocities}")
 
 
         # reward = - balance_reward + forward_reward - ctrl_cost
         reward = balance_reward * forward_reward * ctrl_cost * safety_reward * smooth_control_reward
-        self.prev_torques = current_torques
-        print("pre2",self.prev_torques)
         terminated = False
         info = {
             "x_position": x_position_after,
@@ -352,8 +341,12 @@ class A1Env(MujocoEnv, utils.EzPickle):
         imu = sensordata[24:]#imu:(13,)
         # print(f"qvel:{qvel.shape}")
         # print(f"imu:{imu.shape}")
-        observation = np.concatenate((qpos, qvel, imu)).ravel()
+        # observation = np.concatenate((qpos, qvel, imu)).ravel()
+        observation = np.concatenate((qpos, qvel, imu, self.prev_joint_velocities, self.prev_joint_accelerations)).ravel()
+
         return observation
+    
+
 
     def reset_model(self):
         noise_low = -self._reset_noise_scale
@@ -374,8 +367,11 @@ class A1Env(MujocoEnv, utils.EzPickle):
         # self.prev_actions = np.zeros(12)
         self.prev_joint_velocities = np.zeros(12) # 用于存储之前的关节速度
         self.prev_joint_accelerations = np.zeros(12)  # 用于存储之前的关节加速度 
-
+        # self.prev_torques = np.zeros(12)  # save previous torques value
 
         observation = self._get_obs()
         return observation
+
+
+
 
