@@ -164,9 +164,9 @@ class A1Env(MujocoEnv, utils.EzPickle):
         self._smooth_reward_weight=smooth_reward_weight
         self._reset_noise_scale = reset_noise_scale
         # self.prev_actions = np.zeros(12)
-        # self.prev_joint_velocities = np.zeros(12) 
-        # self.prev_joint_accelerations = np.zeros(12)
-        self.prev_torques = np.zeros(12)  # save previous torques value
+        self.prev_joint_velocities = np.zeros(12) 
+        self.prev_joint_accelerations = np.zeros(12)
+      
   
 
         observation_space = Box(
@@ -253,29 +253,20 @@ class A1Env(MujocoEnv, utils.EzPickle):
             return safety_reward
 
 
-    # def smooth_control_reward(self, current_joint_velocities):
-    #     # print(f"self.current_joint_velocities:{current_joint_velocities}")      
-    #     current_joint_accelerations = (np.array(current_joint_velocities) - np.array(self.prev_joint_velocities))*5
+    def smooth_control_reward(self, current_joint_velocities):
+        # print(f"self.current_joint_velocities:{current_joint_velocities}")      
+        current_joint_accelerations = (np.array(current_joint_velocities) - np.array(self.prev_joint_velocities))*5
       
 
-    #     # calculate the change of all joints acceleration
-    #     acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
-    #     # print(f"acceleration_changes:{acceleration_changes}")
-    #     self.prev_joint_accelerations = current_joint_accelerations
-    #     # smoothness_penalty = np.sum(np.square(acceleration_changes))
-    #     smoothness_penalty = np.sum(acceleration_changes)
-    #     # print(f"smoothness_penalty:{smoothness_penalty}")
-    #     smooth_reward = np.exp(-smoothness_penalty * self._smooth_reward_weight)
-    #     # print(f"smooth_reward:{smooth_reward}")
-    #     return smooth_reward
-    def smooth_control_reward(self, current_torques):
-        # print("current",torques)
-
-        smoothness_penalty = np.sum(np.square(current_torques - self.prev_torques))
-        print("penalty", smoothness_penalty)
+        # calculate the change of all joints acceleration
+        acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
+        # print(f"acceleration_changes:{acceleration_changes}")
+        self.prev_joint_accelerations = current_joint_accelerations
+        # smoothness_penalty = np.sum(np.square(acceleration_changes))
+        smoothness_penalty = np.sum(acceleration_changes)
+        # print(f"smoothness_penalty:{smoothness_penalty}")
         smooth_reward = np.exp(-smoothness_penalty * self._smooth_reward_weight)
-        print("penaltyreward", smoothness_penalty)
-
+        # print(f"smooth_reward:{smooth_reward}")
         return smooth_reward
     
     def step(self, actions):
@@ -381,9 +372,9 @@ class A1Env(MujocoEnv, utils.EzPickle):
 
         self.set_state(qpos, qvel)
         # self.prev_actions = np.zeros(12)
-        # self.prev_joint_velocities = np.zeros(12) # 用于存储之前的关节速度
-        # self.prev_joint_accelerations = np.zeros(12)  # 用于存储之前的关节加速度 
-        self.prev_torques = np.zeros(12)  # save previous torques value
+        self.prev_joint_velocities = np.zeros(12) # 用于存储之前的关节速度
+        self.prev_joint_accelerations = np.zeros(12)  # 用于存储之前的关节加速度 
+
 
         observation = self._get_obs()
         return observation
