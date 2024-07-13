@@ -1,6 +1,5 @@
 <mujoco model="a1">
-  <!-- <compiler angle="radian" meshdir="assets" texturedir="assets" autolimits="true"/> -->
-  <compiler angle="radian" meshdir="assets/" texturedir="assets/"/>
+  <compiler angle="radian" meshdir="assets/" texturedir="assets" autolimits="true"/>
   <option cone="elliptic" impratio="100"/>
 
   <default>
@@ -9,15 +8,15 @@
       <joint axis="0 1 0" damping="2" armature="0.01" frictionloss="0.2"/>
       <position kp="100" forcerange="-33.5 33.5"/>
       <default class="abduction">
-        <joint axis="1 0 0" damping="1" range="-0.802851 0.802851"/>
+        <joint axis="1 0 0" damping="1" range="-0.802851 0.802851" limited="true"/>
         <position ctrlrange="-0.802851 0.802851"/>
       </default>
       <default class="hip">
-        <joint range="-1.0472 4.18879"/>
+        <joint range="-1.0472 4.18879" limited="true"/>
         <position ctrlrange="-1.0472 4.18879"/>
       </default>
       <default class="knee">
-        <joint range="-2.69653 -0.916298"/>
+        <joint range="-2.69653 -0.916298" limited="true"/>
         <position ctrlrange="-2.69653 -0.916298"/>
       </default>
       <default class="visual">
@@ -212,7 +211,7 @@
     <jointpos name="FL_calf_pos"    joint="FL_calf_joint"/>
     <jointpos name="RR_hip_pos"     joint="RR_hip_joint"/>
     <jointpos name="RR_thigh_pos"   joint="RR_thigh_joint"/>
-    <jointpos name="RR_calf_pos"    joint="RR_calf_joint" />
+    <jointpos name="RR_calf_pos"    joint="RR_calf_joint"/>
     <jointpos name="RL_hip_pos"     joint="RL_hip_joint"/>
     <jointpos name="RL_thigh_pos"   joint="RL_thigh_joint"/>
     <jointpos name="RL_calf_pos"    joint="RL_calf_joint"/>
@@ -225,7 +224,7 @@
     <jointvel name="FL_calf_vel"    joint="FL_calf_joint"/>
     <jointvel name="RR_hip_vel"     joint="RR_hip_joint"/>
     <jointvel name="RR_thigh_vel"   joint="RR_thigh_joint"/>
-    <jointvel name="RR_calf_vel"    joint="RR_calf_joint" />
+    <jointvel name="RR_calf_vel"    joint="RR_calf_joint"/>
     <jointvel name="RL_hip_vel"     joint="RL_hip_joint"/>
     <jointvel name="RL_thigh_vel"   joint="RL_thigh_joint"/>
     <jointvel name="RL_calf_vel"    joint="RL_calf_joint"/>
