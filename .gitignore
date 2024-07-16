@@ -1,4 +1,6 @@
 logs/*
 models/*
+src/tests/models
+src/tests/logs
 MUJOCO_LOG.TXT
 *.pyc
