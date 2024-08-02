@@ -137,6 +137,8 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         balance_reward_weight=5.0,
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.01,
+        safety_reward_weight=0.1,
+        smooth_reward_weight=0.001,
         reset_noise_scale=0.1,
         **kwargs,
     ):
@@ -146,6 +148,8 @@ class Go2Env(MujocoEnv, utils.EzPickle):
             balance_reward_weight,
             forward_reward_weight,
             ctrl_cost_weight,
+            safety_reward_weight,
+            smooth_reward_weight,
             reset_noise_scale,
             **kwargs,
         )
@@ -153,10 +157,14 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         self._balance_reward_weight = balance_reward_weight
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
+        self._safety_reward_weight=safety_reward_weight
+        self._smooth_reward_weight=smooth_reward_weight
         self._reset_noise_scale = reset_noise_scale
+        self.prev_joint_velocities = np.zeros(12) 
+        self.prev_joint_accelerations = np.zeros(12)
 
         observation_space = Box(
-            low=-np.inf, high=np.inf, shape=(52,), dtype=np.float64
+            low=-np.inf, high=np.inf, shape=(37,), dtype=np.float64
         )
 
         MujocoEnv.__init__(
@@ -190,11 +198,64 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         dr = np.linalg.norm(r)
         dz = (0.29 - self.data.qpos[2])
         balance_reward = np.exp(-self._balance_reward_weight * np.linalg.norm([dr, dz]))
-        return balance_reward        
+        return balance_reward      
+    
+    def safety_reward(self):
+            joint_limits = {
+                "FR_hip_joint": (-0.802851, 0.802851),
+                "FR_thigh_joint": (-1.0472, 4.18879),
+                "FR_calf_joint": (-2.69653, -0.916298),
+                "FL_hip_joint": (-0.802851, 0.802851),
+                "FL_thigh_joint": (-1.0472, 4.18879),
+                "FL_calf_joint": (-2.69653, -0.916298),
+                "RR_hip_joint": (-0.802851, 0.802851),
+                "RR_thigh_joint": (-1.0472, 4.18879),
+                "RR_calf_joint": (-2.69653, -0.916298),
+                "RL_hip_joint": (-0.802851, 0.802851),
+                "RL_thigh_joint": (-1.0472, 4.18879),
+                "RL_calf_joint": (-2.69653, -0.916298)
+            }
+
+            qpos = self.data.qpos[7:]
+            safety_reward = 1.0  # initial safety reward
+
+            for i, (joint, limits) in enumerate(joint_limits.items()):
+                if not limits[0] <= qpos[i] <= limits[1]:
+                    safety_reward -= 3  # if joints out of the range then lower the reward
+            # print(f"first_Safety Reward: {safety_reward}")
+            thigh_joints = ["FR_thigh_joint", "FL_thigh_joint", "RR_thigh_joint", "RL_thigh_joint"]
+            thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
+            thigh_angles = qpos[thigh_indices]
+
+            # Check for singularity when all joint angles are zero
+            if np.allclose(thigh_angles, 0, atol=5e-2):
+                safety_reward -= 3  # penalize if all joint angles are close to zero
+            # print(f"second_Safety Reward: {safety_reward}")
+            safety_reward = np.exp(self._safety_reward_weight * safety_reward)
+            # print(f"final_Safety Reward: {safety_reward}")
+            return safety_reward
+    
+    def smooth_control_reward(self, current_joint_velocities):
+        # print(f"self.current_joint_velocities:{current_joint_velocities}")      
+        current_joint_accelerations = (np.array(current_joint_velocities) - np.array(self.prev_joint_velocities))*5
+        # print(f"current_joint_accelerations:{current_joint_accelerations}")      
+
+
+        # calculate the change of all joints acceleration
+        acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
+        self.prev_joint_accelerations = current_joint_accelerations
+        smoothness_penalty = np.sum(np.square(acceleration_changes))
+        # smoothness_penalty = np.sum(acceleration_changes)
+        # print(f"smoothness_penalty:{smoothness_penalty}")
+        smooth_reward = np.exp(-smoothness_penalty * self._smooth_reward_weight)
+        # print(f"smooth_reward:{smooth_reward}")
+        return smooth_reward  
 
     def step(self, actions):
+        # CHANGED: assume actions are pos change instead of pos itself
         observation = self._get_obs()
-        despos = observation[:12] + actions * self.dt
+        despos = observation[:12] + actions*self.dt
+        # print(actions)
         x_position_before = self.data.qpos[0]
         self.do_simulation(despos, self.frame_skip)
         x_position_after = self.data.qpos[0]
@@ -203,34 +264,48 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         ctrl_cost = self.control_cost(actions)
         forward_reward = self.forward_reward(x_velocity)
         balance_reward = self.balance_reward()
-
+        safety_reward = self.safety_reward()
+        # smooth_control_reward = self.smooth_control_reward(actions)
+       
         observation = self._get_obs()
-        reward = balance_reward * forward_reward * ctrl_cost
+        current_joint_velocities = self.data.qvel[:12]
+        # print(f"current_joint_velocities:{current_joint_velocities}")
+
+        smooth_control_reward = self.smooth_control_reward(current_joint_velocities)
+        self.prev_joint_velocities = current_joint_velocities
+        # print(f"self.prev_joint_velocities:{self.prev_joint_velocities}")
+
+
+        # reward = - balance_reward + forward_reward - ctrl_cost
+        reward = balance_reward * forward_reward * ctrl_cost * safety_reward * smooth_control_reward
         terminated = False
         info = {
             "x_position": x_position_after,
             "x_velocity": x_velocity,
             "reward_run": forward_reward,
-            "reward_ctrl": -ctrl_cost,        
+            "reward_ctrl": -ctrl_cost,
+            "safety_reward": safety_reward,
+            "smooth_control_reward":smooth_control_reward,
         }
 
         if self.render_mode == "human":
             self.render()
 
+        # add terminated condition
         qw = self.data.qpos[3]
         qx = self.data.qpos[4]
         qy = self.data.qpos[5]
         qz = self.data.qpos[6]
-        quat = [qx, qy, qz, qw]
+        quat = [qx,qy,qz,qw]
         r = R.from_quat(quat).as_rotvec()
         dr = np.linalg.norm(r)
         dz = np.abs(0.29 - self.data.qpos[2])
-        if dz > 0.2: 
+        if(dz>0.5):
             terminated = True
-            print("dz =", dz)
-        if dr > 0.8: 
+            print("dz = ", dz)
+        if(dr>0.5):
             terminated = True
-            print("dr =", r)
+            print("dr = ", r)
 
         return observation, reward, terminated, False, info
     
@@ -276,6 +351,10 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         )
 
         self.set_state(qpos, qvel)
+        # self.prev_actions = np.zeros(12)
+        self.prev_joint_velocities = np.zeros(12) # 用于存储之前的关节速度
+        self.prev_joint_accelerations = np.zeros(12)  # 用于存储之前的关节加速度 
+        # self.prev_torques = np.zeros(12)  # save previous torques value
 
         observation = self._get_obs()
         return observation
