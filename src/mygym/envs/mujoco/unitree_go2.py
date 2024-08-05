@@ -94,13 +94,13 @@ class Go2Env(MujocoEnv, utils.EzPickle):
     default ctrl_cost_weight = 0.1
 
     ## Noise
-    inital state: [0.   0.   0.29    pos
+    inital state: [0.   0.   0.34    pos
                   1.   0.   0.   0. quat
                   0.   0.   0.      FR
                   0.   0.   0.      FL
                   0.   0.   0.      RR
                   0.   0.   0. ]    RL
-    inital observations : [0*12, 0*12, 0,0,-9.8, 0,0,0, 0,0,0.29, 1,0,0,0]
+    inital observations : [0*12, 0*12, 0,0,-9.8, 0,0,0, 0,0,0.34, 1,0,0,0]
     12 positions with a noise in the range of [-`reset_noise_scale`, `reset_noise_scale`] 
     12 velocities with a standard normal noise with a mean of 0 and standard deviation of `reset_noise_scale` 
     13 for IMU
@@ -137,7 +137,7 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         balance_reward_weight=5.0,
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.01,
-        safety_reward_weight=0.1,
+        safety_reward_weight=0.05,
         smooth_reward_weight=0.001,
         reset_noise_scale=0.1,
         **kwargs,
@@ -189,31 +189,37 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         return forward_reward
     
     def balance_reward(self):
+        # todo: use sensordata
         qw = self.data.qpos[3]
         qx = self.data.qpos[4]
         qy = self.data.qpos[5]
         qz = self.data.qpos[6]
-        quat = [qx, qy, qz, qw]
+        quat = [qx,qy,qz,qw]
         r = R.from_quat(quat).as_rotvec()
         dr = np.linalg.norm(r)
-        dz = (0.29 - self.data.qpos[2])
-        balance_reward = np.exp(-self._balance_reward_weight * np.linalg.norm([dr, dz]))
-        return balance_reward      
+        dz = (0.37 - self.data.qpos[2])
+        # balance_reward = self._balance_reward_weight * np.sum(np.square([rx,ry,rz,dz]))
+        balance_reward = np.exp( - self._balance_reward_weight*np.linalg.norm([dr,dz]) )
+        # balance_reward =  self._balance_reward_weight*np.linalg.norm([dr,dz])
+
+        print("before_balance_reward",np.linalg.norm([dr,dz]) )
+        print("balance_reward",balance_reward)
+        return balance_reward    
     
     def safety_reward(self):
             joint_limits = {
-                "FR_hip_joint": (-0.802851, 0.802851),
-                "FR_thigh_joint": (-1.0472, 4.18879),
-                "FR_calf_joint": (-2.69653, -0.916298),
-                "FL_hip_joint": (-0.802851, 0.802851),
-                "FL_thigh_joint": (-1.0472, 4.18879),
-                "FL_calf_joint": (-2.69653, -0.916298),
-                "RR_hip_joint": (-0.802851, 0.802851),
-                "RR_thigh_joint": (-1.0472, 4.18879),
-                "RR_calf_joint": (-2.69653, -0.916298),
-                "RL_hip_joint": (-0.802851, 0.802851),
-                "RL_thigh_joint": (-1.0472, 4.18879),
-                "RL_calf_joint": (-2.69653, -0.916298)
+                "FR_hip_joint": (-0.5, 0.5),
+                "FR_thigh_joint": (-1.0, 1.0),
+                "FR_calf_joint": (-2.0, 0.0),
+                "FL_hip_joint": (-0.5, 0.5),
+                "FL_thigh_joint":(-1.0, 1.0),
+                "FL_calf_joint": (-2.0, 0.0),
+                "RR_hip_joint":(-0.5, 0.5),
+                "RR_thigh_joint": (-1.0, 1.0),
+                "RR_calf_joint": (-2.0, 0.0),
+                "RL_hip_joint": (-0.5, 0.5),
+                "RL_thigh_joint": (-1.0, 1.0),
+                "RL_calf_joint": (-2.0, 0.0)
             }
 
             qpos = self.data.qpos[7:]
@@ -227,12 +233,11 @@ class Go2Env(MujocoEnv, utils.EzPickle):
             thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
             thigh_angles = qpos[thigh_indices]
 
-            # Check for singularity when all joint angles are zero
+            # Check for singularity when thigh joint angles are zero
             if np.allclose(thigh_angles, 0, atol=5e-2):
                 safety_reward -= 3  # penalize if all joint angles are close to zero
             # print(f"second_Safety Reward: {safety_reward}")
             safety_reward = np.exp(self._safety_reward_weight * safety_reward)
-            # print(f"final_Safety Reward: {safety_reward}")
             return safety_reward
     
     def smooth_control_reward(self, current_joint_velocities):
@@ -262,22 +267,25 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         x_velocity = (x_position_after - x_position_before) / self.dt
 
         ctrl_cost = self.control_cost(actions)
+
         forward_reward = self.forward_reward(x_velocity)
         balance_reward = self.balance_reward()
+
         safety_reward = self.safety_reward()
         # smooth_control_reward = self.smooth_control_reward(actions)
-       
+     
+
         observation = self._get_obs()
         current_joint_velocities = self.data.qvel[:12]
         # print(f"current_joint_velocities:{current_joint_velocities}")
 
         smooth_control_reward = self.smooth_control_reward(current_joint_velocities)
+        print(f"smooth_control_reward:{smooth_control_reward}")
         self.prev_joint_velocities = current_joint_velocities
-        # print(f"self.prev_joint_velocities:{self.prev_joint_velocities}")
-
-
-        # reward = - balance_reward + forward_reward - ctrl_cost
+      
         reward = balance_reward * forward_reward * ctrl_cost * safety_reward * smooth_control_reward
+        print(f"reward={reward},balance={balance_reward},ctrl={ctrl_cost},forward={forward_reward},safty={safety_reward},smooth={smooth_control_reward}")
+
         terminated = False
         info = {
             "x_position": x_position_after,
@@ -299,7 +307,7 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         quat = [qx,qy,qz,qw]
         r = R.from_quat(quat).as_rotvec()
         dr = np.linalg.norm(r)
-        dz = np.abs(0.29 - self.data.qpos[2])
+        dz = np.abs(0.37 - self.data.qpos[2])
         if(dz>0.5):
             terminated = True
             print("dz = ", dz)
@@ -340,7 +348,7 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         noise_low = -self._reset_noise_scale
         noise_high = self._reset_noise_scale
 
-        init_qpos = [0.021112, 0.0, -0.005366, 1, 0, 0, 0, 0.3, 0.8, -1.6, 0.3, 0.8, -1.6, 0.3, 0.8, -1.6, 0.3, 0.8, -1.6]
+        init_qpos = [0.0, 0.0, 0.37, 1, 0, 0, 0, 0.0, 0.9, -1.8, 0.0, 0.9, -1.8, 0.0, 0.9, -1.8, 0.0, 0.9, -1.8]
 
         qpos = init_qpos + self.np_random.uniform(
             low=noise_low, high=noise_high, size=self.model.nq
