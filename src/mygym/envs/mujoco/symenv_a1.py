@@ -18,7 +18,7 @@ DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
 
-class A1Env(MujocoEnv, utils.EzPickle):
+class SymA1Env(MujocoEnv, utils.EzPickle):
     """
     ## Description
 
