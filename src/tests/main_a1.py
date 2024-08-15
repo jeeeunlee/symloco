@@ -15,11 +15,14 @@ import os
 
 # Create directories to hold models and logs
 model_dir = "models"
-log_dir = "logs"
-os.makedirs(model_dir, exist_ok=True)
-os.makedirs(log_dir, exist_ok=True)
+# log_dir = "logs"
 
+os.makedirs(model_dir, exist_ok=True)
+# os.makedirs(log_dir, exist_ok=True)
 def train(env:VecEnv, sb3_algo, modelname=''):
+    log_dir = f"logs/{modelname}"
+    os.makedirs(log_dir, exist_ok=True)
+
     match sb3_algo:
         case 'SAC':
             model = SAC('MlpPolicy', env, verbose=1, device='cuda', tensorboard_log=log_dir)
@@ -72,9 +75,15 @@ def test(env:VecEnv,
 if __name__ == '__main__':
 
     # gymenv = gym.make('Humanoid-v4', render_mode='human')
+
+    # ##for the pure RL learning
     # gymenv = make_vec_env('A1-v1', n_envs=4)
+    # #train(gymenv, 'SAC', modelname='SymA1-exprewards')
+    # test(gymenv, sb3_algo='SAC', path_to_model='models/A1-exprewards/SAC_5180000.zip')
+
+    ###for they sym env
     gymenv = make_vec_env('SymA1-v0', n_envs=4)
 
-    # train(gymenv, 'SAC', modelname='A1-exprewards')
+    train(gymenv, 'SAC', modelname='SymA1-exprewards')
 
-    test(gymenv, sb3_algo='SAC', path_to_model='models/SymA1-exprewards/SAC_260000.zip')
+    # test(gymenv, sb3_algo='SAC', path_to_model='models/SymA1-exprewards/SAC_845000.zip')
