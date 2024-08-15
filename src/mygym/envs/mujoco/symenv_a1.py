@@ -135,7 +135,7 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
     def __init__(
         self,
         xml_file=UNITREE_A1_PATH,
-        balance_reward_weight=5.0,
+        balance_reward_weight=0.3,
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.01,
         safety_reward_weight=0.1,
@@ -176,10 +176,18 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
             default_camera_config=DEFAULT_CAMERA_CONFIG,
             **kwargs,
         )
+        #this is the part for the delta of pos
+    
         self.action_space = Box(
             low=-20.0, high=20.0, shape=(12,), dtype=np.float64
         )
-
+        # self.action_space = Box(
+        # low=np.array([-0.802851, -1.0472, -2.69653, -0.802851, -1.0472, -2.69653,
+        # -0.802851, -1.0472, -2.69653, -0.802851, -1.0472, -2.69653]),
+        # high=np.array([0.802851, 4.18879, -0.916298, 0.802851, 4.18879, -0.916298,
+        # 0.802851, 4.18879, -0.916298, 0.802851, 4.18879, -0.916298]),
+        # dtype=np.float64
+        # )
 
 
     def generate_symmetric_initial_state(self):
@@ -197,7 +205,7 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
 
     def mirror_state(self, qpos):
         mirror_qpos = qpos.copy()
-        # 交换左右腿的关节角度
+        # switch left and right legs joints values
         mirror_qpos[7], mirror_qpos[10] = qpos[10], qpos[7]
         mirror_qpos[8], mirror_qpos[11] = qpos[11], qpos[8]
         mirror_qpos[9], mirror_qpos[12] = qpos[12], qpos[9]
@@ -206,17 +214,31 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
         mirror_qpos[15], mirror_qpos[18] = qpos[18], qpos[15]
         return mirror_qpos
 
+
+
     def step(self, actions):
-        #ensure symmetry
+        target_velocity = 2.5 # this is got from unitree A1 code print
+        if self.data.qvel[0] < 0.5*target_velocity:
+            # Initially apply asymmetric actions
+            actions[6:9] += np.array([0.1,0.1,0.1])   # Example initial boost to the rear right leg
+        elif self.data.qvel[0] < target_velocity:
+            # Gradually reduce asymmetry
+            asymmetry_factor = 1 - (self.data.qvel[0] / target_velocity)
+            actions[6:9] += asymmetry_factor * np.array([0.05, 0.05, 0.05])
+        else:
+            # Fully symmetric actions once up to speed
+            actions = self.ensure_symmetry(actions)
+        # just apply the pos to actions instead the delta of pos
         actions = self.ensure_symmetry(actions)
 
         # Get the current observation
         observation = self._get_obs()
 
         # Applying Motion to Robot Models
-        despos = observation[:6] + actions * self.dt  # Operate on the left leg only
+        despos = observation[:12] + actions * self.dt  # Operate on the left leg only this is use the delta of pos
+        # despos = actions
         x_position_before = self.data.qpos[0]
-        print(f"x_position_before:{x_position_before}")
+        # print(f"x_position_before:{x_position_before}")
         self.do_simulation(despos, self.frame_skip)
         x_position_after = self.data.qpos[0]
         x_velocity = (x_position_after - x_position_before) / self.dt
@@ -229,12 +251,21 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
 
         # Getting updated observations
         observation = self._get_obs()
-        current_joint_velocities = np.concatenate((self.data.qvel[10:13], self.data.qvel[16:19])) # Get only the joint velocity of the left leg
+        current_joint_velocities = np.concatenate((self.data.qvel[9:12], self.data.qvel[15:18])) # Get only the joint velocity of the left leg
+        # print(f"current_joint_velocities_len:{len(current_joint_velocities)}")
+
         smooth_control_reward = self.smooth_control_reward(current_joint_velocities)
-        self.prev_joint_velocities[:6] = current_joint_velocities
+        self.prev_joint_velocities= current_joint_velocities
+        # print(f"pre_len:{len(self.prev_joint_velocities)}")
 
         
         reward = balance_reward * forward_reward * ctrl_cost * safety_reward * smooth_control_reward
+        # print(f"Balance Reward: {balance_reward}")
+        # print(f"Forward Reward: {forward_reward}")
+        # print(f"Control Cost: {ctrl_cost}")
+        # print(f"Safety Reward: {safety_reward}")
+        # print(f"Smooth Control Reward: {smooth_control_reward}")
+        # print(f"Total Reward: {reward}")
         terminated = False
         info = {
             "x_position": x_position_after,
@@ -264,8 +295,8 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
         return control_cost
 
     def extract_symmetric_action(self, action):
-        left_leg_action = action[:6]
-        right_leg_action = action[6:]
+        left_leg_action = np.concatenate((action[3:6], action[9:12]))
+        right_leg_action = np.concatenate((action[0:3], action[6:9]))
         sym_action = (left_leg_action + right_leg_action) / 2.0
         return np.concatenate([sym_action, sym_action])
 
@@ -282,40 +313,47 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
         r = R.from_quat(quat).as_rotvec()
         dr = np.linalg.norm(r)
         dz = (0.29 - self.data.qpos[2])
+        print(f"dr-dz:{dr-dz}")
         balance_reward = np.exp(-self._balance_reward_weight * np.linalg.norm([dr,dz]))
+        print(f"balance_reward_before:{((-self._balance_reward_weight * np.linalg.norm([dr,dz])))}")
+
+        print(f"balance_reward:{(balance_reward)}")
         return balance_reward
 
     def safety_reward(self):
-    # still only concern left legs jonits limits
-    joint_limits = {
-        "FL_hip_joint": (-0.802851, 0.802851),
-        "FL_thigh_joint": (-1.0472, 4.18879),
-        "FL_calf_joint": (-2.69653, -0.916298),
-        "RL_hip_joint": (-0.802851, 0.802851),
-        "RL_thigh_joint": (-1.0472, 4.18879),
-        "RL_calf_joint": (-2.69653, -0.916298),
-    }
+        # still only concern left legs jonits limits
+        joint_limits = {
+            "FL_hip_joint": (-0.802851, 0.802851),
+            "FL_thigh_joint": (-1.0472, 4.18879),
+            "FL_calf_joint": (-2.69653, -0.916298),
+            "RL_hip_joint": (-0.802851, 0.802851),
+            "RL_thigh_joint": (-1.0472, 4.18879),
+            "RL_calf_joint": (-2.69653, -0.916298),
+        }
 
-    # need to make sure whether the array returns the right value （done）
-    qpos = np.concatenate((self.data.qpos[10:13], self.data.qpos[16:19]))
-    safety_reward = 1.0  # init the safety reward
+        # need to make sure whether the array returns the right value （done）
+        qpos = np.concatenate((self.data.qpos[10:13], self.data.qpos[16:19]))
+        safety_reward = 1.0  # init the safety reward
 
-    for i, (joint, limits) in enumerate(joint_limits.items()):
-        if not limits[0] <= qpos[i] <= limits[1]:
-            safety_reward -= 3  # lower reward
+        for i, (joint, limits) in enumerate(joint_limits.items()):
+            if not limits[0] <= qpos[i] <= limits[1]:
+                safety_reward -= 3  # lower reward
 
-    # check the joints of all left thighs
-    thigh_joints = ["FL_thigh_joint", "RL_thigh_joint"]
-    thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
-    thigh_angles = qpos[thigh_indices]
+        # check the joints of all left thighs
+        thigh_joints = ["FL_thigh_joint", "RL_thigh_joint"]
+        thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
+        thigh_angles = qpos[thigh_indices]
 
-    if np.allclose(thigh_angles, 0, atol=5e-2):
-        safety_reward -= 3  # this represent the singularity points of left legs
+        if np.allclose(thigh_angles, 0, atol=5e-2):
+            safety_reward -= 3  # this represent the singularity points of left legs
 
-    safety_reward = np.exp(self._safety_reward_weight * safety_reward)
-    return safety_reward
+        safety_reward = np.exp(self._safety_reward_weight * safety_reward)
+        return safety_reward
 
     def smooth_control_reward(self, current_joint_velocities):
+        # print(f"2current_joint_velocities_len:{len(current_joint_velocities)}")
+        # print(f"2pre_len:{len(self.prev_joint_velocities)}")
+
         current_joint_accelerations = (np.array(current_joint_velocities) - np.array(self.prev_joint_velocities)) * 5
         acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
         self.prev_joint_accelerations = current_joint_accelerations
@@ -327,13 +365,16 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
         position = self.data.qpos.flat.copy()
         velocity = self.data.qvel.flat.copy()
         sensordata = self.data.sensordata
+        # print(f"position:{len(position)},velocity:{len(velocity)},sensordata:{len(sensordata)}")
 
         # just keep left leg values need to confirm with this
-        qpos = position[7:13]  
-        qvel = np.concatenate((velocity[10:13], velocity[16:19]))
+        qpos = np.concatenate((position[10:13], position[16:19]))
+        qvel = np.concatenate((velocity[9:12], velocity[15:18]))
         imu = sensordata[24:]  
 
         observation = np.concatenate((qpos, qvel, imu, self.prev_joint_velocities, self.prev_joint_accelerations)).ravel()
+        # print(f"qpos_len:{len(qpos)},qvel_len:{len(qvel)},imu_len:{len(imu)},observation_len{len(observation)}")
+
         return observation
 
 
@@ -347,4 +388,3 @@ class SymA1Env(MujocoEnv, utils.EzPickle):
 
         observation = self._get_obs()
         return observation
-
