@@ -1,12 +1,4 @@
 import os
-# add path home/jelee/my_ws/RL/symloco/src
-dirname = os.path.dirname(__file__)
-for i in range(3):
-    path = os.path.abspath(dirname)
-    dirname = os.path.dirname(path)
-# print(dirname)
-UNITREE_A1_PATH = os.path.join(dirname, "mygym/envs/mujoco/unitree_a1/scene.xml")
-
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -14,13 +6,19 @@ from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
 
+# Set the path to the XML file for Unitree A1 (Go2 can be used similarly)
+dirname = os.path.dirname(__file__)
+for i in range(3):
+    path = os.path.abspath(dirname)
+    dirname = os.path.dirname(path)
+
+UNITREE_A1_PATH = os.path.join(dirname, "mygym/envs/mujoco/unitree_a1/scene.xml")
 
 DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
 
-
-class A1Env(MujocoEnv, utils.EzPickle):
+class SymA1Env(MujocoEnv, utils.EzPickle):
     """
     ## Description
 
@@ -137,11 +135,11 @@ class A1Env(MujocoEnv, utils.EzPickle):
     def __init__(
         self,
         xml_file=UNITREE_A1_PATH,
-        balance_reward_weight=5.0,
-        forward_reward_weight=2.0,
+        balance_reward_weight=0.3,
+        forward_reward_weight=1.0,
         ctrl_cost_weight=0.01,
         safety_reward_weight=0.1,
-        smooth_reward_weight=0.01,
+        smooth_reward_weight=0.001,
         reset_noise_scale=0.1,
         **kwargs,
     ):
@@ -160,17 +158,16 @@ class A1Env(MujocoEnv, utils.EzPickle):
         self._balance_reward_weight = balance_reward_weight
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
-        self._safety_reward_weight=safety_reward_weight
-        self._smooth_reward_weight=smooth_reward_weight
+        self._safety_reward_weight = safety_reward_weight
+        self._smooth_reward_weight = smooth_reward_weight
         self._reset_noise_scale = reset_noise_scale
-        # self.prev_actions = np.zeros(12)
-        self.prev_joint_velocities = np.zeros(12) 
-        self.prev_joint_accelerations = np.zeros(12)
-  
+        self.prev_joint_velocities = np.zeros(6)
+        self.prev_joint_accelerations = np.zeros(6)
+
         observation_space = Box(
-            low=-np.inf, high=np.inf, shape=(61,), dtype=np.float64
+            low=-np.inf, high=np.inf, shape=(37,), dtype=np.float64
         )
-        #if this is necessary to define the observation space limits of segments？
+        
         MujocoEnv.__init__(
             self,
             model_path=xml_file,
@@ -179,27 +176,135 @@ class A1Env(MujocoEnv, utils.EzPickle):
             default_camera_config=DEFAULT_CAMERA_CONFIG,
             **kwargs,
         )
-        # reset action_space automatically set from MujocoEnv.__init__
+        #this is the part for the delta of pos
+    
         self.action_space = Box(
             low=-20.0, high=20.0, shape=(12,), dtype=np.float64
         )
+        # self.action_space = Box(
+        # low=np.array([-0.802851, -1.0472, -2.69653, -0.802851, -1.0472, -2.69653,
+        # -0.802851, -1.0472, -2.69653, -0.802851, -1.0472, -2.69653]),
+        # high=np.array([0.802851, 4.18879, -0.916298, 0.802851, 4.18879, -0.916298,
+        # 0.802851, 4.18879, -0.916298, 0.802851, 4.18879, -0.916298]),
+        # dtype=np.float64
+        # )
+
+
+    def generate_symmetric_initial_state(self):
+        init_qpos = [0,0,0.26,1,0,0,0, 0.3,0.8,-1.6, 0.3,0.8,-1.6, 0.3,0.8,-1.6, 0.3,0.8,-1.6]
+        qpos = init_qpos + self.np_random.uniform(
+            low=-self._reset_noise_scale, high=self._reset_noise_scale, size=self.model.nq
+        )
+        qvel = (
+            self.init_qvel
+            + self._reset_noise_scale * self.np_random.standard_normal(self.model.nv)
+        )
+        if np.random.rand() > 0.5:
+            qpos = self.mirror_state(qpos)  # Generating mirror symmetry states
+        return qpos, qvel
+
+    def mirror_state(self, qpos):
+        mirror_qpos = qpos.copy()
+        # switch left and right legs joints values
+        mirror_qpos[7], mirror_qpos[10] = qpos[10], qpos[7]
+        mirror_qpos[8], mirror_qpos[11] = qpos[11], qpos[8]
+        mirror_qpos[9], mirror_qpos[12] = qpos[12], qpos[9]
+        mirror_qpos[13], mirror_qpos[16] = qpos[16], qpos[13]
+        mirror_qpos[14], mirror_qpos[17] = qpos[17], qpos[14]
+        mirror_qpos[15], mirror_qpos[18] = qpos[18], qpos[15]
+        return mirror_qpos
+
+
+
+    def step(self, actions):
+        target_velocity = 2.5 # this is got from unitree A1 code print
+        if self.data.qvel[0] < 0.5*target_velocity:
+            # Initially apply asymmetric actions
+            actions[6:9] += np.array([0.1,0.1,0.1])   # Example initial boost to the rear right leg
+        elif self.data.qvel[0] < target_velocity:
+            # Gradually reduce asymmetry
+            asymmetry_factor = 1 - (self.data.qvel[0] / target_velocity)
+            actions[6:9] += asymmetry_factor * np.array([0.05, 0.05, 0.05])
+        else:
+            # Fully symmetric actions once up to speed
+            actions = self.ensure_symmetry(actions)
+        # just apply the pos to actions instead the delta of pos
+        actions = self.ensure_symmetry(actions)
+
+        # Get the current observation
+        observation = self._get_obs()
+
+        # Applying Motion to Robot Models
+        despos = observation[:12] + actions * self.dt  # Operate on the left leg only this is use the delta of pos
+        # despos = actions
+        x_position_before = self.data.qpos[0]
+        # print(f"x_position_before:{x_position_before}")
+        self.do_simulation(despos, self.frame_skip)
+        x_position_after = self.data.qpos[0]
+        x_velocity = (x_position_after - x_position_before) / self.dt
+
+    
+        ctrl_cost = self.control_cost(actions)
+        forward_reward = self.forward_reward(x_velocity)
+        balance_reward = self.balance_reward()
+        safety_reward = self.safety_reward()
+
+        # Getting updated observations
+        observation = self._get_obs()
+        current_joint_velocities = np.concatenate((self.data.qvel[9:12], self.data.qvel[15:18])) # Get only the joint velocity of the left leg
+        # print(f"current_joint_velocities_len:{len(current_joint_velocities)}")
+
+        smooth_control_reward = self.smooth_control_reward(current_joint_velocities)
+        self.prev_joint_velocities= current_joint_velocities
+        # print(f"pre_len:{len(self.prev_joint_velocities)}")
+
+        
+        reward = balance_reward * forward_reward * ctrl_cost * safety_reward * smooth_control_reward
+        # print(f"Balance Reward: {balance_reward}")
+        # print(f"Forward Reward: {forward_reward}")
+        # print(f"Control Cost: {ctrl_cost}")
+        # print(f"Safety Reward: {safety_reward}")
+        # print(f"Smooth Control Reward: {smooth_control_reward}")
+        # print(f"Total Reward: {reward}")
+        terminated = False
+        info = {
+            "x_position": x_position_after,
+            "x_velocity": x_velocity,
+            "reward_run": forward_reward,
+            "reward_ctrl": -ctrl_cost,
+            "safety_reward": safety_reward,
+            "smooth_control_reward": smooth_control_reward,
+        }
+
+        if self.render_mode == "human":
+            self.render()
+
+        return observation, reward, terminated, False, info
+
+
+    def ensure_symmetry(self, actions):
+        # only keep left legs actions
+        left_leg_actions = actions[:6]
+        right_leg_actions = left_leg_actions  # Copy the left leg movement directly to the right leg
+        return np.concatenate([left_leg_actions, right_leg_actions])
+
 
     def control_cost(self, action):
-        # control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
-        control_cost = np.exp( - self._ctrl_cost_weight * np.linalg.norm(action) )
-        # print("before_control_cost",np.linalg.norm(action))
-        # print("control_cost",control_cost)
+        sym_action = self.extract_symmetric_action(action)
+        control_cost = np.exp(-self._ctrl_cost_weight * np.linalg.norm(sym_action))
         return control_cost
 
+    def extract_symmetric_action(self, action):
+        left_leg_action = np.concatenate((action[3:6], action[9:12]))
+        right_leg_action = np.concatenate((action[0:3], action[6:9]))
+        sym_action = (left_leg_action + right_leg_action) / 2.0
+        return np.concatenate([sym_action, sym_action])
+
     def forward_reward(self, x_velocity):
-        # forward_reward = self._forward_reward_weight * x_velocity
-        forward_reward = np.exp( self._forward_reward_weight * x_velocity )
-        # print("before_forward_reward",x_velocity)
-        # print("forward_reward",forward_reward)
+        forward_reward = np.exp(self._forward_reward_weight * x_velocity)
         return forward_reward
 
     def balance_reward(self):
-        # todo: use sensordata
         qw = self.data.qpos[3]
         qx = self.data.qpos[4]
         qy = self.data.qpos[5]
@@ -208,174 +313,78 @@ class A1Env(MujocoEnv, utils.EzPickle):
         r = R.from_quat(quat).as_rotvec()
         dr = np.linalg.norm(r)
         dz = (0.29 - self.data.qpos[2])
-        balance_reward = np.exp( - self._balance_reward_weight*np.linalg.norm([dr,dz]) )
+        print(f"dr-dz:{dr-dz}")
+        balance_reward = np.exp(-self._balance_reward_weight * np.linalg.norm([dr,dz]))
+        print(f"balance_reward_before:{((-self._balance_reward_weight * np.linalg.norm([dr,dz])))}")
+
+        print(f"balance_reward:{(balance_reward)}")
         return balance_reward
 
-    
     def safety_reward(self):
-            joint_limits = {
-                "FR_hip_joint": (-0.802851, 0.802851),
-                "FR_thigh_joint": (-1.0472, 4.18879),
-                "FR_calf_joint": (-2.69653, -0.916298),
-                "FL_hip_joint": (-0.802851, 0.802851),
-                "FL_thigh_joint": (-1.0472, 4.18879),
-                "FL_calf_joint": (-2.69653, -0.916298),
-                "RR_hip_joint": (-0.802851, 0.802851),
-                "RR_thigh_joint": (-1.0472, 4.18879),
-                "RR_calf_joint": (-2.69653, -0.916298),
-                "RL_hip_joint": (-0.802851, 0.802851),
-                "RL_thigh_joint": (-1.0472, 4.18879),
-                "RL_calf_joint": (-2.69653, -0.916298)
-            }
-
-            qpos = self.data.qpos[7:]
-            safety_reward = 0.0  # initial safety reward
-
-            for i, (joint, limits) in enumerate(joint_limits.items()):
-                if not limits[0] <= qpos[i] <= limits[1]:
-                    safety_reward -= 3  # if joints out of the range then lower the reward
-            # print(f"first_Safety Reward: {safety_reward}")
-
-            # Check for singularity when thigh joint angles are zero
-            thigh_joints = ["FR_thigh_joint", "FL_thigh_joint", "RR_thigh_joint", "RL_thigh_joint"]
-            thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
-            thigh_angles = qpos[thigh_indices]            
-            if np.allclose(thigh_angles, 0, atol=5e-2):
-                safety_reward -= 3  # penalize if all joint angles are close to zero
-            # print(f"second_Safety Reward: {safety_reward}")
-            safety_reward = np.exp(self._safety_reward_weight * safety_reward)
-            # print(f"final_Safety Reward: {safety_reward}")
-            return safety_reward
-
-
-    def smooth_control_reward(self, current_joint_velocities, current_joint_accelerations):
-
-        # print(f"current_joint_accelerations:{current_joint_accelerations}")      
-        smoothness_penalty_acc = np.sum(np.square(current_joint_accelerations))
-
-        # calculate the change of all joints acceleration        
-        acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
-        smoothness_penalty_accchg = np.sum(np.square(acceleration_changes))
-
-        smoothness_penalty = 0.1*smoothness_penalty_acc + smoothness_penalty_accchg
-        # print(f"smoothness_penalty:{smoothness_penalty}")
-        
-        smooth_reward = np.exp(-smoothness_penalty * self._smooth_reward_weight)
-        # print(f"smooth_reward:{smooth_reward}")
-        return smooth_reward
-
-    
-    def step(self, actions):
-        # CHANGED: assume actions are pos change instead of pos itself
-        observation = self._get_obs()
-        despos = observation[:12] + actions*self.dt
-        # print(actions)
-        x_position_before = self.data.qpos[0]
-        self.do_simulation(despos, self.frame_skip)
-        x_position_after = self.data.qpos[0]
-        x_velocity = (x_position_after - x_position_before) / self.dt
-
-        ctrl_cost = self.control_cost(actions)
-        forward_reward = self.forward_reward(x_velocity)
-        balance_reward = self.balance_reward()
-        safety_reward = self.safety_reward()
-       
-        current_joint_velocities = self.data.qvel[:12]
-        current_joint_accelerations = (
-            np.array(current_joint_velocities) - np.array(self.prev_joint_velocities)) / self.dt
-
-        smooth_control_reward = self.smooth_control_reward(
-            current_joint_velocities, current_joint_accelerations)
-        self.prev_joint_velocities = current_joint_velocities
-        self.prev_joint_accelerations = current_joint_accelerations
-        # print(f"self.prev_joint_velocities:{self.prev_joint_velocities}")
-
-        # reward = - balance_reward + forward_reward - ctrl_cost
-        reward = balance_reward * forward_reward * ctrl_cost * safety_reward * smooth_control_reward
-        terminated = False
-        info = {
-            "x_position": x_position_after,
-            "x_velocity": x_velocity,
-            "reward_run": forward_reward,
-            "reward_ctrl": -ctrl_cost,
-            "safety_reward": safety_reward,
-            "smooth_control_reward":smooth_control_reward,
+        # still only concern left legs jonits limits
+        joint_limits = {
+            "FL_hip_joint": (-0.802851, 0.802851),
+            "FL_thigh_joint": (-1.0472, 4.18879),
+            "FL_calf_joint": (-2.69653, -0.916298),
+            "RL_hip_joint": (-0.802851, 0.802851),
+            "RL_thigh_joint": (-1.0472, 4.18879),
+            "RL_calf_joint": (-2.69653, -0.916298),
         }
 
-        if self.render_mode == "human":
-            self.render()
+        # need to make sure whether the array returns the right value （done）
+        qpos = np.concatenate((self.data.qpos[10:13], self.data.qpos[16:19]))
+        safety_reward = 1.0  # init the safety reward
 
-        # add terminated condition
-        qw = self.data.qpos[3]
-        qx = self.data.qpos[4]
-        qy = self.data.qpos[5]
-        qz = self.data.qpos[6]
-        quat = [qx,qy,qz,qw]
-        r = R.from_quat(quat).as_rotvec()
-        dr = np.linalg.norm(r)
-        dz = np.abs(0.29 - self.data.qpos[2])
-        if(dz>0.5):
-            terminated = True
-            print("dz = ", dz)
-        if(dr>0.5):
-            terminated = True
-            print("dr = ", r)
+        for i, (joint, limits) in enumerate(joint_limits.items()):
+            if not limits[0] <= qpos[i] <= limits[1]:
+                safety_reward -= 3  # lower reward
 
-        return observation, reward, terminated, False, info
+        # check the joints of all left thighs
+        thigh_joints = ["FL_thigh_joint", "RL_thigh_joint"]
+        thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
+        thigh_angles = qpos[thigh_indices]
 
-    def _get_sensor_data(self):
-        return self.data.sensordata
+        if np.allclose(thigh_angles, 0, atol=5e-2):
+            safety_reward -= 3  # this represent the singularity points of left legs
+
+        safety_reward = np.exp(self._safety_reward_weight * safety_reward)
+        return safety_reward
+
+    def smooth_control_reward(self, current_joint_velocities):
+        # print(f"2current_joint_velocities_len:{len(current_joint_velocities)}")
+        # print(f"2pre_len:{len(self.prev_joint_velocities)}")
+
+        current_joint_accelerations = (np.array(current_joint_velocities) - np.array(self.prev_joint_velocities)) * 5
+        acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
+        self.prev_joint_accelerations = current_joint_accelerations
+        smoothness_penalty = np.sum(np.square(acceleration_changes))
+        smooth_reward = np.exp(-smoothness_penalty * self._smooth_reward_weight)
+        return smooth_reward
 
     def _get_obs(self):
-        # observation = self.data.sensordata
-        position = self.data.qpos.flat.copy()#position:(19,)
-        velocity = self.data.qvel.flat.copy()#velocity:(18,)
-        sensordata = self.data.sensordata#sensordata:(37,)
-    
-        # removing floating base states and add imu data
-        qpos = position[7:]#qpos:(12,)
-        qvel = velocity[6:]#qvel:(12,)
-        imu = sensordata[24:]#imu:(13,)
-        # print(f"qvel:{qvel.shape}")
-        # print(f"imu:{imu.shape}")
-        # observation = np.concatenate((qpos, qvel, imu)).ravel()
-        observation = np.concatenate((qpos, qvel, imu, 
-                                      self.prev_joint_velocities, 
-                                      self.prev_joint_accelerations)).ravel()
+        position = self.data.qpos.flat.copy()
+        velocity = self.data.qvel.flat.copy()
+        sensordata = self.data.sensordata
+        # print(f"position:{len(position)},velocity:{len(velocity)},sensordata:{len(sensordata)}")
+
+        # just keep left leg values need to confirm with this
+        qpos = np.concatenate((position[10:13], position[16:19]))
+        qvel = np.concatenate((velocity[9:12], velocity[15:18]))
+        imu = sensordata[24:]  
+
+        observation = np.concatenate((qpos, qvel, imu, self.prev_joint_velocities, self.prev_joint_accelerations)).ravel()
+        # print(f"qpos_len:{len(qpos)},qvel_len:{len(qvel)},imu_len:{len(imu)},observation_len{len(observation)}")
 
         return observation
-    
 
 
     def reset_model(self):
-        noise_low = -self._reset_noise_scale
-        noise_high = self._reset_noise_scale
-
-        init_qpos = [0,0,0.26,
-                     1,0,0,0, 
-                     0.3,0.8,-1.6, 
-                     0.3,0.8,-1.6,
-                     0.3,0.8,-1.6, 
-                     0.3,0.8,-1.6]
-   
-
-        qpos = init_qpos + self.np_random.uniform(
-            low=noise_low, high=noise_high, size=self.model.nq
-        )
-        qvel = (
-            self.init_qvel
-            + self._reset_noise_scale * self.np_random.standard_normal(self.model.nv)
-        )
-
+        qpos, qvel = self.generate_symmetric_initial_state()
         self.set_state(qpos, qvel)
         # self.prev_actions = np.zeros(12)
-        self.prev_joint_velocities = np.zeros(12) # 用于存储之前的关节速度
-        self.prev_joint_accelerations = np.zeros(12)  # 用于存储之前的关节加速度 
+        self.prev_joint_velocities = np.zeros(6) # save previous left legs velocities
+        self.prev_joint_accelerations = np.zeros(6)  # save previous left legs accelerations
         # self.prev_torques = np.zeros(12)  # save previous torques value
 
         observation = self._get_obs()
         return observation
-
-
-
-

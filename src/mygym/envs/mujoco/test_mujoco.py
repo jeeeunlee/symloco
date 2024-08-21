@@ -10,7 +10,20 @@ DEFAULT_CAMERA_CONFIG = {
 FREQ = 200 
 A1_XML_PATH = "src/mygym/envs/mujoco/unitree_a1/scene.xml"
 
-init_qpos = [0,0,0.35,1,0,0,0, 0.3,1,-1.9, 0.3,1,-1.9, 0.3,1,-1.9, 0.3,1,-1.9]
+# init_qpos = [0,0,0.26,
+#             1,0,0,0, 
+#             0.3,0.8,-1.6, 
+#             0.3,0.8,-1.6,
+#             0.3,0.8,-1.6, 
+#             0.3,0.8,-1.6]
+
+init_qpos = [0,0,0.28,
+            1,0,0,0, 
+            -0.2,0.8,-1.6, 
+            0.2,0.8,-1.6,
+            -0.2,0.8,-1.6, 
+            0.2,0.8,-1.6]
+   
 
 if __name__ == "__main__":
         
@@ -25,6 +38,7 @@ if __name__ == "__main__":
 
         mujoco.mj_step(model, data)
         mujoco_renderer.render("human")
+        data.qpos = init_qpos
         
         # print(f"position: {len(data.qpos)}")
         # print(data.qpos)
@@ -34,20 +48,23 @@ if __name__ == "__main__":
         
         qpos = data.qpos[7:]
         qvel = data.qvel[6:]
+
+        sen_qpos = data.sensordata[0:12]
+        sen_qvel = data.sensordata[12:24]
+        sen_qtrq = data.sensordata[24:36]
         
         acc = [0.0]*3
         gyro = data.qvel[3:6]
         bpos = data.qpos[0:3]
         bquat = data.qpos[3:7]
 
-        imu = np.concatenate((acc, gyro, bpos, bquat)).ravel()
-        concat = np.concatenate((qpos, qvel, imu)).ravel()
-        
-        # print(f"sensordata: {len(data.sensordata)}")
-        # print(f"concat: {len(concat)}")
-
-        print(data.qpos)
-        print(data.sensordata)
+        print("===============================")
+        print("pos: --------------------------")
+        print(sen_qpos)
+        print(qpos)
+        print("vel: --------------------------")
+        print(sen_qvel)
+        print(qvel)
         
         
 

@@ -240,7 +240,7 @@ class Go2Env(MujocoEnv, utils.EzPickle):
     def _get_obs(self):
         position = self.data.qpos.flat.copy()#position shape: (19,)
         velocity = self.data.qvel.flat.copy()#velocity shape: (18,)
-        sensordata = self.data.sensordata#sensordata shape: (52,)
+        sensordata = self.data.sensordata.flat.copy()#sensordata shape: (52,)
         # num_sensors = self.model.nsensor
         # sensor_names = self.model.sensor_names
         # for i in range(num_sensors):
@@ -250,22 +250,22 @@ class Go2Env(MujocoEnv, utils.EzPickle):
 
         qpos = position[7:]#qpos shape: (12,)
         qvel = velocity[6:]#qvel shape: (12,)
-        imu = sensordata[36:49]#imu shape: (13,)
+        # imu = sensordata[36:49]#imu shape: (13,)
+        imu = sensordata[36:] #imu shape: (16,)
 
-        # reorder
-        reordered_imu = np.concatenate((imu[7:10], imu[4:7], imu[10:], imu[:4]))
-
-        # print("Original array:", imu)
-        # print("Reordered array:", reordered_imu)
-        # print(f"imudata:{imu.shape}")
-        observation = np.concatenate((qpos, qvel, reordered_imu)).ravel()
+        observation = np.concatenate((qpos, qvel, imu)).ravel()
         return observation
 
     def reset_model(self):
         noise_low = -self._reset_noise_scale
         noise_high = self._reset_noise_scale
 
-        init_qpos = [0.021112, 0.0, -0.005366, 1, 0, 0, 0, 0.3, 0.8, -1.6, 0.3, 0.8, -1.6, 0.3, 0.8, -1.6, 0.3, 0.8, -1.6]
+        init_qpos = [0.,0.,0.3, 1.,0.,0.,0., 
+                    0.2, 0.8, -1.6,
+                    -0.2, 0.8, -1.6,
+                    0.2, 0.8, -1.6, 
+                    -0.2, 0.8, -1.6]
+
 
         qpos = init_qpos + self.np_random.uniform(
             low=noise_low, high=noise_high, size=self.model.nq

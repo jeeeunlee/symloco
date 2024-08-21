@@ -15,11 +15,14 @@ import os
 
 # Create directories to hold models and logs
 model_dir = "models"
-log_dir = "logs"
-os.makedirs(model_dir, exist_ok=True)
-os.makedirs(log_dir, exist_ok=True)
+# log_dir = "logs"
 
+os.makedirs(model_dir, exist_ok=True)
+# os.makedirs(log_dir, exist_ok=True)
 def train(env:VecEnv, sb3_algo, modelname=''):
+    log_dir = f"logs/{modelname}"
+    os.makedirs(log_dir, exist_ok=True)
+
     match sb3_algo:
         case 'SAC':
             model = SAC('MlpPolicy', env, verbose=1, device='cuda', tensorboard_log=log_dir)
