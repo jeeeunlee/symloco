@@ -156,7 +156,7 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         self._reset_noise_scale = reset_noise_scale
 
         observation_space = Box(
-            low=-np.inf, high=np.inf, shape=(52,), dtype=np.float64
+            low=-np.inf, high=np.inf, shape=(40,), dtype=np.float64
         )
 
         MujocoEnv.__init__(
