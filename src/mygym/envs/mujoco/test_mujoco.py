@@ -38,20 +38,14 @@ if __name__ == "__main__":
 
         mujoco.mj_step(model, data)
         mujoco_renderer.render("human")
-        data.qpos = init_qpos
-        
-        # print(f"position: {len(data.qpos)}")
-        # print(data.qpos)
-
-        # print(f"velocity: {len(data.qvel)}")
-        # print(data.qvel)
-        
+        # data.qpos = init_qpos  
+        data.ctrl = init_qpos[7:]      
+       
         qpos = data.qpos[7:]
         qvel = data.qvel[6:]
 
         sen_qpos = data.sensordata[0:12]
         sen_qvel = data.sensordata[12:24]
-        sen_qtrq = data.sensordata[24:36]
         
         acc = [0.0]*3
         gyro = data.qvel[3:6]

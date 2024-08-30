@@ -166,6 +166,7 @@ class A1Env(MujocoEnv, utils.EzPickle):
         # self.prev_actions = np.zeros(12)
         self.prev_joint_velocities = np.zeros(12) 
         self.prev_joint_accelerations = np.zeros(12)
+        self.prev_
   
         observation_space = Box(
             low=-np.inf, high=np.inf, shape=(61,), dtype=np.float64

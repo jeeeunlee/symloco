@@ -73,5 +73,6 @@ def test(env: VecEnv, sb3_algo: str, path_to_model: str):
 
 if __name__ == '__main__':
     gymenv = make_vec_env('GO2-v1', n_envs=4)
-    train(gymenv, 'SAC', modelname='GO2-exprewards')
-    # test(gymenv, sb3_algo='SAC', path_to_model='models/GO2-exprewards/SAC_265000.zip')
+    train(gymenv, 'SAC', modelname='GO2-exprewards-240828')
+    # test(gymenv, sb3_algo='SAC', path_to_model='models/GO2-exprewards-240828/SAC_10000.zip')
+    

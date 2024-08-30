@@ -7,8 +7,8 @@ from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
-FREQ = 200 
 GO2_XML_PATH = "src/mygym/envs/mujoco/unitree_go2/scene.xml"
+INIT_PRINT = True
 
 # init_qpos = [0,0,0.35,
 #                 1, 0, 0, 0, 
@@ -17,11 +17,16 @@ GO2_XML_PATH = "src/mygym/envs/mujoco/unitree_go2/scene.xml"
 #                 0.3, 0.8, -1.6, 
 #                 0.3, 0.8, -1.6]
 
-init_qpos = [0,0,0.3, 1,0,0,0, 
+init_qpos_reverted = [0, 0, 0.28, 1,0,0,0, 
              0.2, 0.8, -1.6,
             -0.2, 0.8, -1.6,
             0.2, 0.8, -1.6, 
             -0.2, 0.8, -1.6]
+init_qpos = [0, 0, 0.28, 1,0,0,0, 
+             -0.2, 0.8, -1.6,
+            0.2, 0.8, -1.6,
+            -0.2, 0.8, -1.6, 
+            0.2, 0.8, -1.6]
 
 if __name__ == "__main__":
         
@@ -30,20 +35,16 @@ if __name__ == "__main__":
     mujoco_renderer = MujocoRenderer(
         model, data, DEFAULT_CAMERA_CONFIG)
 
-    data.qpos = init_qpos
+    data.qpos = init_qpos #init_qpos_reverted
+    
 
-    for t in range(1000):
+    for t in range(10000):
 
         mujoco.mj_step(model, data)
         mujoco_renderer.render("human")
         
-        # print(f"position: {len(data.qpos)}")
-        # print(data.qpos)
-
-        # print(f"velocity: {len(data.qvel)}")
-        # print(data.qvel)
-
-        data.qpos = init_qpos
+        data.ctrl = init_qpos[7:]
+        # data.qpos = init_qpos
         
         qpos = data.qpos[7:]
         qvel = data.qvel[6:]
@@ -54,7 +55,7 @@ if __name__ == "__main__":
         bvel = data.qvel[0:3]
         bquat = data.qpos[3:7]
 
-        fake_imu = np.concatenate((acc, gyro, bpos, bquat, bvel)).ravel()
+        # fake_imu = np.concatenate((acc, gyro, bpos, bquat, bvel)).ravel()
 
         sen_qpos = data.sensordata[0:12]
         sen_qvel = data.sensordata[12:24]
@@ -66,33 +67,35 @@ if __name__ == "__main__":
         frame_pos = data.sensordata[46:49] #3
         frame_vel = data.sensordata[49:] #3
 
-        print("===============================")
-        print("pos: --------------------------")
-        print(sen_qpos)
-        print(qpos)
-        print("vel: --------------------------")
-        print(sen_qvel)
-        print(qvel)
-        print("acc: --------------------------")
-        print(imu_acc)
-        print(acc)
-        print("gyro: --------------------------")
-        print(imu_gyro)
-        print(gyro)
-        print("imu_quat: --------------------------")
-        print(imu_quat)
-        print(bquat)
-        print("frame_pos: --------------------------")
-        print(frame_pos)
-        print(bpos)
-        print("frame_vel: --------------------------")
-        print(frame_vel)
-        print(bvel)
-        
-        # print(f"sensordata: {len(data.sensordata)}")
-        # print(f"concat: {len(concat)}")
-        # print(data.qpos)
-        # print(data.sensordata)
+        # if(INIT_PRINT):
+        if(t%1000 == 0):
+            INIT_PRINT = False
+            num_sensors = model.nsensor
+            num_sensordata = model.nsensordata
+
+            print("===============================")
+            print(f"t={t}")
+            print("pos: --------------------------")
+            print(sen_qpos)
+            print(qpos)
+            print("vel: --------------------------")
+            print(sen_qvel)
+            print(qvel)
+            print("acc: --------------------------")
+            print(imu_acc)
+            print(acc)
+            print("gyro: --------------------------")
+            print(imu_gyro)
+            print(gyro)
+            print("imu_quat: --------------------------")
+            print(imu_quat)
+            print(bquat)
+            print("frame_pos: --------------------------")
+            print(frame_pos)
+            print(bpos)
+            print("frame_vel: --------------------------")
+            print(frame_vel)
+            print(bvel)
         
         
 
