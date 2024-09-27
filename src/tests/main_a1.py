@@ -76,6 +76,6 @@ if __name__ == '__main__':
 
     # gymenv = gym.make('Humanoid-v4', render_mode='human')
     gymenv = make_vec_env('A1-v1', n_envs=4)
-    # train(gymenv, 'SAC', modelname='A1-240719')
+    train(gymenv, 'SAC', modelname='A1-240831')
 
-    test(gymenv, sb3_algo='SAC', path_to_model='models/A1-240717/SAC_5000.zip')
+    # test(gymenv, sb3_algo='SAC', path_to_model='models/A1-240717/SAC_5000.zip')

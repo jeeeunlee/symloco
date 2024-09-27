@@ -5,7 +5,8 @@
 
   <default>
     <default class="go2">
-      <geom friction="0.6" margin="0.001" condim="1"/>
+      <!-- <geom friction="0.6" margin="0.001" condim="1"/> -->
+      <geom friction="0.6" margin="0.001"/>
       <joint axis="0 1 0" damping="2" armature="0.01" frictionloss="0.2"/>
       <!-- <motor ctrlrange="-23.7 23.7"/> -->
       <position kp="100" forcerange="-23.7 23.7"/>
@@ -34,7 +35,7 @@
       <default class="collision">
         <geom group="3"/>
         <default class="foot">
-          <geom size="0.022" pos="-0.002 0 -0.213" priority="1" solimp="0.015 1 0.022" condim="6"
+          <geom type="sphere" size="0.022" pos="-0.002 0 -0.213" priority="1" solimp="0.015 1 0.022" condim="6"
             friction="0.8 0.02 0.01"/>
         </default>
       </default>
@@ -206,31 +207,31 @@
   </actuator>
 
   <sensor>
-    <jointpos name="FR_hip_pos" joint="FR_hip_joint" />
-    <jointpos name="FR_thigh_pos" joint="FR_thigh_joint" />
-    <jointpos name="FR_calf_pos" joint="FR_calf_joint" />
-    <jointpos name="FL_hip_pos" joint="FL_hip_joint" />
-    <jointpos name="FL_thigh_pos" joint="FL_thigh_joint" />
-    <jointpos name="FL_calf_pos" joint="FL_calf_joint" />
-    <jointpos name="RR_hip_pos" joint="RR_hip_joint" />
-    <jointpos name="RR_thigh_pos" joint="RR_thigh_joint" />
-    <jointpos name="RR_calf_pos" joint="RR_calf_joint" />
-    <jointpos name="RL_hip_pos" joint="RL_hip_joint" />
-    <jointpos name="RL_thigh_pos" joint="RL_thigh_joint" />
-    <jointpos name="RL_calf_pos" joint="RL_calf_joint" />
+    <jointpos name="FR_hip_pos" joint="FR_hip_joint" noise="0.01" />
+    <jointpos name="FR_thigh_pos" joint="FR_thigh_joint" noise="0.01" />
+    <jointpos name="FR_calf_pos" joint="FR_calf_joint" noise="0.01" />
+    <jointpos name="FL_hip_pos" joint="FL_hip_joint" noise="0.01" />
+    <jointpos name="FL_thigh_pos" joint="FL_thigh_joint" noise="0.01" />
+    <jointpos name="FL_calf_pos" joint="FL_calf_joint" noise="0.01" />
+    <jointpos name="RR_hip_pos" joint="RR_hip_joint" noise="0.01" />
+    <jointpos name="RR_thigh_pos" joint="RR_thigh_joint" noise="0.01"/>
+    <jointpos name="RR_calf_pos" joint="RR_calf_joint" noise="0.01"/>
+    <jointpos name="RL_hip_pos" joint="RL_hip_joint" noise="0.01"/>
+    <jointpos name="RL_thigh_pos" joint="RL_thigh_joint" noise="0.01"/>
+    <jointpos name="RL_calf_pos" joint="RL_calf_joint" noise="0.01"/>
 
-    <jointvel name="FR_hip_vel" joint="FR_hip_joint" />
-    <jointvel name="FR_thigh_vel" joint="FR_thigh_joint" />
-    <jointvel name="FR_calf_vel" joint="FR_calf_joint" />
-    <jointvel name="FL_hip_vel" joint="FL_hip_joint" />
-    <jointvel name="FL_thigh_vel" joint="FL_thigh_joint" />
-    <jointvel name="FL_calf_vel" joint="FL_calf_joint" />
-    <jointvel name="RR_hip_vel" joint="RR_hip_joint" />
-    <jointvel name="RR_thigh_vel" joint="RR_thigh_joint" />
-    <jointvel name="RR_calf_vel" joint="RR_calf_joint" />
-    <jointvel name="RL_hip_vel" joint="RL_hip_joint" />
-    <jointvel name="RL_thigh_vel" joint="RL_thigh_joint" />
-    <jointvel name="RL_calf_vel" joint="RL_calf_joint" />
+    <jointvel name="FR_hip_vel" joint="FR_hip_joint" noise="0.01"/>
+    <jointvel name="FR_thigh_vel" joint="FR_thigh_joint" noise="0.01"/>
+    <jointvel name="FR_calf_vel" joint="FR_calf_joint" noise="0.01"/>
+    <jointvel name="FL_hip_vel" joint="FL_hip_joint" noise="0.01"/>
+    <jointvel name="FL_thigh_vel" joint="FL_thigh_joint" noise="0.01"/>
+    <jointvel name="FL_calf_vel" joint="FL_calf_joint" noise="0.01"/>
+    <jointvel name="RR_hip_vel" joint="RR_hip_joint" noise="0.01"/>
+    <jointvel name="RR_thigh_vel" joint="RR_thigh_joint" noise="0.01"/>
+    <jointvel name="RR_calf_vel" joint="RR_calf_joint" noise="0.01"/>
+    <jointvel name="RL_hip_vel" joint="RL_hip_joint" noise="0.01"/>
+    <jointvel name="RL_thigh_vel" joint="RL_thigh_joint" noise="0.01"/>
+    <jointvel name="RL_calf_vel" joint="RL_calf_joint" noise="0.01"/>
 
     <jointactuatorfrc name="FR_hip_torque" joint="FR_hip_joint" noise="0.01" />
     <jointactuatorfrc name="FR_thigh_torque" joint="FR_thigh_joint" noise="0.01" />

@@ -1,3 +1,7 @@
+import os
+import sys
+sys.path.append(os.getcwd())
+
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 
 from gymnasium import spaces
@@ -6,6 +10,9 @@ from torch import nn
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.env_util import make_vec_env
+
+import src.mygym.networks
 
 
 class CustomNetwork(nn.Module):
@@ -54,6 +61,7 @@ class CustomNetwork(nn.Module):
         return self.value_net(features)
 
 
+
 class CustomActorCriticPolicy(ActorCriticPolicy):
     def __init__(
         self,
@@ -78,6 +86,24 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
     def _build_mlp_extractor(self) -> None:
         self.mlp_extractor = CustomNetwork(self.features_dim)
 
+env = make_vec_env("simple_cheetah", n_envs=4) #simple_idp
+model = PPO(CustomActorCriticPolicy, env , verbose=1)
+model.learn(100)
 
-model = PPO(CustomActorCriticPolicy, "CartPole-v1", verbose=1)
-model.learn(5000)
+obs = env.reset()
+done = False
+n_envs = env.num_envs
+extra_steps = [500]*n_envs
+while True:
+    action, states = model.predict(obs)
+    obs, rewards, dones, info = env.step(action)        
+    env.render("human")
+    for i, done in enumerate(dones):
+        if done:
+            extra_steps[i] -= 1
+        if extra_steps[i] < 0:
+            break
+
+
+
+
