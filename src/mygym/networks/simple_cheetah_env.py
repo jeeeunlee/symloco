@@ -1,6 +1,7 @@
 import numpy as np
 import os
 
+import torch as th
 from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
@@ -22,7 +23,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
     The action space is a `ndarray` with shape `(6,)`
 
     ## Observation Space
-    The observation is a `ndarray` with shape `(11,)` where the elements correspond to the following:
+    The observation is a `ndarray` with shape `(18,)` where the elements correspond to the following:
 
     """
 
@@ -40,7 +41,6 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.1,
         reset_noise_scale=0.1,
-        exclude_current_positions_from_observation=True,
         **kwargs,
     ):
         utils.EzPickle.__init__(
@@ -48,28 +48,16 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
             forward_reward_weight,
             ctrl_cost_weight,
             reset_noise_scale,
-            exclude_current_positions_from_observation,
             **kwargs,
         )
 
         self._forward_reward_weight = forward_reward_weight
-
         self._ctrl_cost_weight = ctrl_cost_weight
-
         self._reset_noise_scale = reset_noise_scale
 
-        self._exclude_current_positions_from_observation = (
-            exclude_current_positions_from_observation
+        observation_space = Box(
+            low=-np.inf, high=np.inf, shape=(18,), dtype=np.float64
         )
-
-        if exclude_current_positions_from_observation:
-            observation_space = Box(
-                low=-np.inf, high=np.inf, shape=(17,), dtype=np.float64
-            )
-        else:
-            observation_space = Box(
-                low=-np.inf, high=np.inf, shape=(18,), dtype=np.float64
-            )
 
         MujocoEnv.__init__(
             self,
@@ -114,8 +102,8 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         position = self.data.qpos.flat.copy()
         velocity = self.data.qvel.flat.copy()
 
-        if self._exclude_current_positions_from_observation:
-            position = position[1:]
+        # if self._exclude_current_positions_from_observation:
+        #     position = position[1:]
 
         observation = np.concatenate((position, velocity)).ravel()
         return observation
@@ -138,13 +126,30 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         return observation
     
     def init_sym_structure_param(self):
-        # self.restructured_feature_dim
-        # self.restructured_action_dim
-        pass
+        self.restructured_feature_dim = 12 # 6 for body + 6 for leg
+        self.restructured_action_dim = 3 # 3x2(left, right)
 
     def restruct_features_fn(self, feature):
-        structured_features = []
+        # feature shape [n,18]
+        rootx = feature[:, [0, 9]]  # Shape [n, 2]
+        rootz = feature[:, [1, 10]] # Shape [n, 2]
+        rooty = feature[:, [2, 11]] # Shape [n, 2]
+
+        bfoot_pos = feature[:, 3:6]  # Shape [n, 3]
+        ffoot_pos = feature[:, 6:9]  # Shape [n, 3]
+        bfoot_vel = feature[:, 12:15]  # Shape [n, 3]
+        ffoot_vel = feature[:, 15:18]  # Shape [n, 3]
 
 
-    def destruct_actions_fn(self, structured_actions):
-        actions = []
+        feature_left = th.cat([rootx, rootz, rooty, 
+                               bfoot_pos, bfoot_vel],dim=1)
+        feature_right = th.cat([-rootx, rootz, -rooty, 
+                                -ffoot_pos, -ffoot_vel],dim=1)
+        structured_features = th.stack([feature_left, feature_right], dim=1)
+        return structured_features
+
+
+    def destruct_actions_fn(self, structured_actions): # shape [n,2,3]
+        actions = th.cat((structured_actions[:,0,:], 
+                        structured_actions[:,1,:]),dim=1)
+        return actions # shape [n,6]

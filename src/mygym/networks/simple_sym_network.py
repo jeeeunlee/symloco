@@ -16,6 +16,7 @@ from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.type_aliases import GymEnv
+from stable_baselines3.common.preprocessing import get_action_dim
 
 import src.mygym.networks
 
@@ -48,10 +49,10 @@ class Aggregator():
               aggregator=th.sum):
     self._aggregator = aggregator
   
-  def __call__(self, inputs):
-    axis_dim = inputs.shape
-    res = self._aggregator(inputs, dim=1, keepdim=True)
-    return res.repeat(1, axis_dim[1])
+  def __call__(self, inputs:th.Tensor) ->th.Tensor:
+    axis_dim = inputs.shape # n,2,64
+    res = self._aggregator(inputs, dim=1, keepdim=True) # n,1,64
+    return res.repeat(1, axis_dim[1],1) # n,2,64
 
 class SetEncodeProcessDecode(nn.Module):
     def __init__(self,
@@ -59,9 +60,8 @@ class SetEncodeProcessDecode(nn.Module):
                latent_size=LATENT_SIZE,
                num_layer=NUM_LAYER,
                output_size=OUTPUT_SIZE,
-               num_processing_steps=3,
-               name="EncodeProcessDecode"):
-        super(SetEncodeProcessDecode, self).__init__(name=name)
+               num_processing_steps=3):
+        super(SetEncodeProcessDecode, self).__init__()
 
         self._encoder = make_mlp_model(input_dim, latent_size, num_layer,nameadd='_enc')
         self._core = make_mlp_model(2*latent_size, latent_size, num_layer,nameadd='_core')
@@ -70,15 +70,15 @@ class SetEncodeProcessDecode(nn.Module):
         self._num_processing_steps = num_processing_steps
 
     def forward(self, input_op):
-        latent0 = self._encoder(input_op)
-        latent = latent0
+        latent0 = self._encoder(input_op) # Shape [n,2,12]
+        latent = latent0 # Shape [n,2,64]
 
         for _ in range(self._num_processing_steps):
-            latent = self._aggregator(latent)
-            core_input = th.concat([latent0, latent], axis=2)
-            latent = self._core(core_input)
+            latent = self._aggregator(latent) # Shape [n,2,64]
+            core_input = th.cat([latent0, latent], axis=2) # Shape [n,2,128]
+            latent = self._core(core_input) # Shape [n,2,64]
             
-        return self._decoder(latent)
+        return self._decoder(latent) # Shape [n,2,64]
 
 
 class ReflectionNetwork(nn.Module):
@@ -93,7 +93,7 @@ class ReflectionNetwork(nn.Module):
 
     def __init__(
         self,
-        env: Union[GymEnv, str],
+        env, #: Union[GymEnv, str]
         last_layer_dim_pi: int = 64,
         last_layer_dim_vf: int = 64,        
     ):
@@ -122,19 +122,19 @@ class ReflectionNetwork(nn.Module):
         """
         return self.forward_actor(features), self.forward_critic(features)
 
-    def forward_actor(self, features: th.Tensor) -> th.Tensor:
-        features_set = self.env.restruct_features_fn(features)
+    def forward_actor(self, features: th.Tensor) -> th.Tensor: # shape [n,18]
+        features_set = self.env.restruct_features_fn(features) # shape [n,2,12]
         return self.policy_net(features_set)
 
-    def forward_critic(self, features: th.Tensor) -> th.Tensor:
-        features_set = self.env.restruct_features_fn(features)
+    def forward_critic(self, features: th.Tensor) -> th.Tensor: # shape [n,18]
+        features_set = self.env.restruct_features_fn(features) # shape [n,2,12]
         return self.value_net(features_set)
 
 class ReflectionLinearNetwork(nn.Module):
     def __init__(self,
         env: Union[GymEnv, str],
         latent_dim: int):
-
+        super().__init__()
         self.restruct_features_fn = env.restruct_features_fn
         self.destruct_actions_fn = env.destruct_actions_fn
         # do later 
@@ -146,6 +146,20 @@ class ReflectionLinearNetwork(nn.Module):
     def forward(self, latent: th.Tensor) -> th.Tensor:
         restructured_action = self.output_net(latent)
         return self.destruct_actions_fn(restructured_action)
+    
+class ReflectionAggregatorLinearNetwork(nn.Module):
+    def __init__(self,        
+        latent_dim: int,
+        output_dim: int =1,
+        aggregator=th.sum,
+        dim=1):
+        super().__init__()
+        self._aggregator = aggregator
+        self._dim = dim
+        self.output_net = nn.Linear(latent_dim, output_dim)
+    def forward(self, latent: th.Tensor) -> th.Tensor:
+        aggregated_latent = self._aggregator(latent, dim=self._dim)
+        return (self.output_net(aggregated_latent)) # shape [n,1]
 
 class CustomActorCriticPolicy(ActorCriticPolicy):
     def __init__(
@@ -157,6 +171,11 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         **kwargs,
     ):       
         self.env = kwargs["env"]
+        # additional 
+        self.restructured_feature_dim = self.env.restructured_feature_dim
+        self.restructured_action_dim = self.env.restructured_action_dim
+
+        self.action_dim = get_action_dim(action_space)
 
         # Disable orthogonal initialization
         new_kwargs = {k: v for k, v in kwargs.items() if k not in ["env"]}
@@ -169,14 +188,9 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
             *args,
             **new_kwargs,
         )
-        # additional 
-        self.restructured_feature_dim = self.env.restructured_feature_dim
-        self.restructured_action_dim = self.env.restructured_action_dim
-
 
     def _build_mlp_extractor(self) -> None:
-        self.mlp_extractor = ReflectionNetwork(env=self.env, 
-                            restructured_feature_dim=self.restructured_feature_dim)
+        self.mlp_extractor = ReflectionNetwork(env=self.env)
 
     def _build_action_net(self, latent_dim: int, log_std_init: float = 0.0)-> Tuple[nn.Module, nn.Parameter]:
         """
@@ -210,7 +224,8 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
                 latent_dim=latent_dim_pi, log_std_init=self.log_std_init
             )
 
-        self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
+        self.value_net = ReflectionAggregatorLinearNetwork(self.mlp_extractor.latent_dim_vf, 1)
+        # self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:
@@ -248,22 +263,22 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         # Preprocess the observation if needed
         features = self.extract_features(obs)
         if self.share_features_extractor:
-            latent_pi, latent_vf = self.mlp_extractor(features)
+            latent_pi, latent_vf = self.mlp_extractor(features) # Shape [n,2,64]
         else:
             pi_features, vf_features = features
-            latent_pi = self.mlp_extractor.forward_actor(pi_features)
-            latent_vf = self.mlp_extractor.forward_critic(vf_features)
+            latent_pi = self.mlp_extractor.forward_actor(pi_features) 
+            latent_vf = self.mlp_extractor.forward_critic(vf_features) 
         # Evaluate the values for the given observations
-        values = self.value_net(latent_vf)
-        distribution = self._get_action_dist_from_latent(latent_pi)
+        values = self.value_net(latent_vf) # shape [n,1]
+        distribution = self._get_action_dist_from_latent(latent_pi) # shape [n,6]
         actions = distribution.get_actions(deterministic=deterministic)
         log_prob = distribution.log_prob(actions)
         actions = actions.reshape((-1, *self.action_space.shape))  # type: ignore[misc]
         return actions, values, log_prob
 
 env = make_vec_env("simple_cheetah", n_envs=4)
-model = PPO(CustomActorCriticPolicy, env, verbose=1, policy_kwargs={"env":env})
-model.learn(5000)
+model = PPO(CustomActorCriticPolicy, env, verbose=1, policy_kwargs={"env":env.envs[0]})
+model.learn(100)
 
 obs = env.reset()
 done = False

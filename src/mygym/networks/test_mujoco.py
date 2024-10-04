@@ -33,7 +33,7 @@ if __name__ == "__main__":
         # data.qpos = init_qpos  
         # data.ctrl = init_qpos[7:]
         # data.qpos[3:] = init_qpos[3:]
-        # data.qpos[0:3] = [0,0,0]
+        data.qpos[0:3] = [0,0,0]
         data.qpos[3:6] = [0.1, 0.1, 0.1]
         data.qpos[6:9] = [-0.1, -0.1, -0.1]
        
