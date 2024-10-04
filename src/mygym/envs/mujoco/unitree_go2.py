@@ -1,18 +1,4 @@
 import os
-dirname = os.path.dirname(__file__)
-for i in range(3):
-    path = os.path.abspath(dirname)
-    dirname = os.path.dirname(path)
-# print(dirname)
-UNITREE_GO2_PATH = os.path.join(dirname, "mygym/envs/mujoco/unitree_go2/scene.xml")
-init_z = 0.005
-init_qpos = [0, 0, 0.275 + init_z, 
-            1,0,0,0, 
-             -0.2, 0.8, -1.6,
-            0.2, 0.8, -1.6,
-            -0.2, 0.8, -1.6, 
-            0.2, 0.8, -1.6]
-
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -20,9 +6,31 @@ from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
 
+dirname = os.path.dirname(__file__)
+for i in range(3):
+    path = os.path.abspath(dirname)
+    dirname = os.path.dirname(path)
+
+UNITREE_GO2_PATH = os.path.join(dirname, "mygym/envs/mujoco/unitree_go2/scene.xml")
+init_z = 0.005
+
+# fmt: off
+init_qpos = [
+    0, 0, 0.275 + init_z,  # pos
+    1, 0, 0, 0,  # quat
+    -0.2, 0.8, -1.6,  # FR
+    0.2, 0.8, -1.6,  # FL
+    -0.2, 0.8, -1.6,   # RR
+    0.2, 0.8, -1.6  # RL
+]
+# fmt: onpos
+
 DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
+
+OBSERVATION_DIMS = 56 + 24
+
 
 class Go2Env(MujocoEnv, utils.EzPickle):
     """
@@ -52,21 +60,22 @@ class Go2Env(MujocoEnv, utils.EzPickle):
     | --- | --------------------| -------- | -------- | -------------- | --------- | ----------- |
     | 0~11| Pos Cmd on joint    |    -     |     -    |       -        |           | angle (rad) |
     |12~23| ang vel of joint    |   -inf   |    inf   |       -        |     -     | vel (rad/s) |
-    |23~35| ang trq of joint    |   -inf   |    inf   |       -        |     -     | trq (?)     |
+    |24~35| ang trq of joint    |   -inf   |    inf   |       -        |     -     | trq (?)     |
     |36~39| Quaternion in IMU   |   -inf   |    inf   | imu_quat       | sensor    | quat        |
     |40~42| Gyroscope in IMU    |   -inf   |    inf   | imu_gyro       | sensor    | vel (rad/s) |
     |43~45| Acclerometer in IMU |   -inf   |    inf   | imu_acc        | sensor    | acc (m/s2)  |
     |46~48| Position in IMU     |   -inf   |    inf   | frame_pos      | sensor    | pos (m)     |
-    |49~52| Velocity in IMU     |   -inf   |    inf   | frame_vel      | sensor    | vel (m/s)   |
+    |49~51| Velocity in IMU     |   -inf   |    inf   | frame_vel      | sensor    | vel (m/s)   |
+    |52-56| Foot touch sensors  |   0      |    inf   | *_foot_touch   | sensor    | force (N)   |
 
     + additional observation (previous histories)
 
     ## Rewards
-    reward = forward_reward - ctrl_cost 
-    - *forward_reward*: A reward of moving forward 
+    reward = forward_reward - ctrl_cost
+    - *forward_reward*: A reward of moving forward
                         = forward_reward_weight * ( x[t+1] - x[t] ) / dt
-    default dt = 5(frame_skip) * 0.01(frametime) = 0.05. 
-    - *ctrl_cost*: A cost for penalising large actions 
+    default dt = 5(frame_skip) * 0.01(frametime) = 0.05.
+    - *ctrl_cost*: A cost for penalising large actions
         = ctrl_cost_weight * sum(action^2)
     default ctrl_cost_weight = 0.1
 
@@ -78,9 +87,9 @@ class Go2Env(MujocoEnv, utils.EzPickle):
                 0.2, 0.8, -1.6,     RR
                 -0.2, 0.8, -1.6]    RL
 
-    inital observations : [0*12, 0*12, 
-    12 positions with a noise in the range of [-`reset_noise_scale`, `reset_noise_scale`] 
-    12 velocities with a standard normal noise with a mean of 0 and standard deviation of `reset_noise_scale` 
+    inital observations : [0*12, 0*12,
+    12 positions with a noise in the range of [-`reset_noise_scale`, `reset_noise_scale`]
+    12 velocities with a standard normal noise with a mean of 0 and standard deviation of `reset_noise_scale`
     13 for IMU
 
     ## Episode End
@@ -98,7 +107,6 @@ class Go2Env(MujocoEnv, utils.EzPickle):
     | `ctrl_cost_weight`        | **float** | `0.1`                | Weight for _ctrl_cost_ weight (see section on reward)                                                                                                             |
     | `reset_noise_scale`       | **float** | `0.1`                | Scale of random perturbations of initial position and velocity (see section on Starting State)                                                                    |
     """
-
 
     metadata = {
         "render_modes": [
@@ -134,26 +142,26 @@ class Go2Env(MujocoEnv, utils.EzPickle):
             reset_noise_scale,
             **kwargs,
         )
-        self.x_velocity_desired=x_velocity_desired
+        self.x_velocity_desired = x_velocity_desired
         # reward weights
         self._balance_reward_weight = balance_reward_weight
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
-        self._safety_reward_weight=safety_reward_weight
-        self._smooth_reward_weight=smooth_reward_weight
+        self._safety_reward_weight = safety_reward_weight
+        self._smooth_reward_weight = smooth_reward_weight
         # noise
         self._reset_noise_scale = reset_noise_scale
         # additional observation
-        self.prev_joint_velocity = np.zeros(12) 
+        self.prev_joint_velocity = np.zeros(12)
         self.prev_joint_acceleration = np.zeros(12)
-        self.dim_obs = 52 + 24 #76
+        self.dim_obs = OBSERVATION_DIMS
         # init prev cmd
         self.count_after_reset = 0
         self.prev_joint_cmd = np.zeros(12)
         self.dim_action = 12
         self.init_qpos = init_qpos
         self.init_qpos_inverted = init_qpos.copy()
-        self.revert_sign_abduction(self.init_qpos_inverted)        
+        self.revert_sign_abduction(self.init_qpos_inverted)
 
         observation_space = Box(
             low=-np.inf, high=np.inf, shape=(self.dim_obs,), dtype=np.float64
@@ -174,68 +182,75 @@ class Go2Env(MujocoEnv, utils.EzPickle):
 
     def revert_sign_abduction(self, q_value):
         # don't know why but sign reverted for abduction joint
-        if(len(q_value)>12): base_ind = 7 
-        else: base_ind=0
-        for abd_ind in [0,3,6,9]:
-            q_value[abd_ind+base_ind] *= -1
+        if len(q_value) > 12:
+            base_ind = 7
+        else:
+            base_ind = 0
+        for abd_ind in [0, 3, 6, 9]:
+            q_value[abd_ind + base_ind] *= -1
 
     def control_cost(self, action):
         control_cost = np.exp(-self._ctrl_cost_weight * np.linalg.norm(action))
         return control_cost
-    
+
     def forward_reward(self, x_velocity):
-        forward_reward = np.exp(-self._forward_reward_weight * (x_velocity-self.x_velocity_desired)**2)
+        forward_reward = np.exp(
+            -self._forward_reward_weight * (x_velocity - self.x_velocity_desired) ** 2
+        )
         return forward_reward
-    
+
     def balance_reward(self):
         qw = self.data.qpos[3]
         qx = self.data.qpos[4]
         qy = self.data.qpos[5]
-        qz = self.data.qpos[6] 
+        qz = self.data.qpos[6]
         quat = [qx, qy, qz, qw]
         r = R.from_quat(quat).as_rotvec()
         dr = np.linalg.norm(r)
-        dz = (self.init_qpos[2] - self.data.qpos[2] )
-        balance_reward = np.exp(-self._balance_reward_weight * np.linalg.norm([dr, 2.5*dz]))
+        dz = self.init_qpos[2] - self.data.qpos[2]
+        balance_reward = np.exp(
+            -self._balance_reward_weight * np.linalg.norm([dr, 2.5 * dz])
+        )
         return balance_reward, dr, dz
-    
-    def smooth_control_reward(self):    
+
+    def smooth_control_reward(self):
         smoothness_penalty_acc = np.sqrt(np.sum(np.square(self.joint_accleration)))
         smoothness_penalty_vel = np.sqrt(np.sum(np.square(self.joint_velocity)))
-        smoothness_penalty = smoothness_penalty_acc + 0.1*smoothness_penalty_vel
-        # print(f"smoothness_penalty:{smoothness_penalty}")        
-        smooth_reward = np.exp(-self._smooth_reward_weight*smoothness_penalty)
+        smoothness_penalty = smoothness_penalty_acc + 0.1 * smoothness_penalty_vel
+        # print(f"smoothness_penalty:{smoothness_penalty}")
+        smooth_reward = np.exp(-self._smooth_reward_weight * smoothness_penalty)
         # print(f"smooth_reward:{smooth_reward}")
         return smooth_reward
-    
+
     def safety_reward(self):
-            joint_limits = self.model.jnt_range[1:]
+        joint_limits = self.model.jnt_range[1:]
 
-            # qpos = self.data.qpos[7:]
-            qpos = self.data.sensordata[:12]
-            safety_reward = 0.0  # initial safety reward
+        # qpos = self.data.qpos[7:]
+        qpos = self.data.sensordata[:12]
+        safety_reward = 0.0  # initial safety reward
 
-            for i, limits in enumerate(joint_limits):
-                # 0 ~ 0.5
-                dist_to_limit = (np.min([limits[1]-qpos[i], qpos[i]-limits[0]]))/(limits[1]-limits[0])                
-                if (dist_to_limit-0.1) < 0: safety_reward  -= (1-10*dist_to_limit)**2
-            # print(f"first_Safety Reward: {safety_reward}")
-            
-            safety_reward = np.exp(self._safety_reward_weight * safety_reward)
-            # print(f"final_Safety Reward: {safety_reward}")
-            return safety_reward
+        for i, limits in enumerate(joint_limits):
+            # 0 ~ 0.5
+            dist_to_limit = (np.min([limits[1] - qpos[i], qpos[i] - limits[0]])) / (
+                limits[1] - limits[0]
+            )
+            if (dist_to_limit - 0.1) < 0:
+                safety_reward -= (1 - 10 * dist_to_limit) ** 2
+        # print(f"first_Safety Reward: {safety_reward}")
 
-
+        safety_reward = np.exp(self._safety_reward_weight * safety_reward)
+        # print(f"final_Safety Reward: {safety_reward}")
+        return safety_reward
 
     def step(self, actions):
         self.count_after_reset += 1
         observation = self._get_obs()
-        despos = self.prev_joint_cmd + actions*self.dt
+        despos = self.prev_joint_cmd + actions * self.dt
         x_position_before = self.data.qpos[0]
-        self.do_simulation(despos, self.frame_skip)        
+        self.do_simulation(despos, self.frame_skip)
         x_position_after = self.data.qpos[0]
         x_velocity = (x_position_after - x_position_before) / self.dt
-        self._update_prev_obs(despos)        
+        self._update_prev_obs(despos)
 
         ctrl_cost = self.control_cost(actions)
         forward_reward = self.forward_reward(x_velocity)
@@ -245,16 +260,16 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         no_temination_reward = np.exp(self.count_after_reset)
 
         observation = self._get_obs()
-        reward = balance_reward * forward_reward * ctrl_cost  * safety_reward
+        reward = balance_reward * forward_reward * ctrl_cost * safety_reward
         # * smooth_control_reward * no_temination_reward
-        
+
         info = {
             "x_position": x_position_after,
             "x_velocity": x_velocity,
             "reward_run": forward_reward,
             "reward_ctrl": -ctrl_cost,
             "safety_reward": safety_reward,
-            "smooth_control_reward":smooth_control_reward,
+            "smooth_control_reward": smooth_control_reward,
         }
 
         if self.render_mode == "human":
@@ -262,40 +277,49 @@ class Go2Env(MujocoEnv, utils.EzPickle):
 
         # termination condition
         terminated = False
-        if dz > 0.25: 
+        if dz > 0.25:
             terminated = True
             print("dz =", dz)
-        if dr > 0.75: 
+        if dr > 0.75:
             terminated = True
             print("dr =", dr)
 
         return observation, reward, terminated, False, info
-    
+
     def _get_sensor_data(self):
         return self.data.sensordata
 
-    def _get_obs(self):        
+    def _get_obs(self):
         # position = self.data.qpos.flat.copy() #position shape: (19,)
         # velocity = self.data.qvel.flat.copy() #velocity shape: (18,)
         # qpos = position[7:]#qpos shape: (12,)
         # qvel = velocity[6:]#qvel shape: (12,)
 
-        sensordata = self.data.sensordata.flat.copy() #sensordata shape: (52,)
-        qpos = sensordata[:12]#qpos shape: (12,)
-        qvel = sensordata[12:24]#qvel shape: (12,)
-        qtrq = sensordata[24:36]#trq shape: (12,)
-        imu = sensordata[36:] #imu shape: (16,)        
+        sensordata = self.data.sensordata.flat.copy()  # sensordata shape: (56,)
+        qpos = sensordata[:12]  # qpos shape: (12,)
+        qvel = sensordata[12:24]  # qvel shape: (12,)
+        qtrq = sensordata[24:36]  # trq shape: (12,)
+        imu = sensordata[36:]  # imu shape: (16,)
 
-        observation = np.concatenate((qpos, qvel, qtrq, imu,
-                            self.prev_joint_velocity, 
-                            self.prev_joint_acceleration)).ravel()
+        observation = np.concatenate(
+            (
+                qpos,
+                qvel,
+                qtrq,
+                imu,
+                self.prev_joint_velocity,
+                self.prev_joint_acceleration,
+            )
+        ).ravel()
 
         return observation
-    
+
     def _update_prev_obs(self, pos_cmd):
         # update prev_joint_velocity, prev_joint_acceleration
-        self.joint_velocity = (pos_cmd-self.prev_joint_cmd)/self.dt
-        self.joint_accleration = (self.joint_velocity-self.prev_joint_velocity)/self.dt
+        self.joint_velocity = (pos_cmd - self.prev_joint_cmd) / self.dt
+        self.joint_accleration = (
+            self.joint_velocity - self.prev_joint_velocity
+        ) / self.dt
         self.prev_joint_cmd = pos_cmd.flat.copy()
         self.prev_joint_velocity = self.joint_velocity.flat.copy()
         self.prev_joint_acceleration = self.joint_accleration.flat.copy()
@@ -303,9 +327,9 @@ class Go2Env(MujocoEnv, utils.EzPickle):
     def reset_model(self):
         self.count_after_reset = 0
         qpos = self.init_qpos_inverted + self.np_random.uniform(
-            low=-self._reset_noise_scale, 
-            high=self._reset_noise_scale, 
-            size=self.model.nq
+            low=-self._reset_noise_scale,
+            high=self._reset_noise_scale,
+            size=self.model.nq,
         )
         qvel = (
             self.init_qvel
@@ -314,16 +338,16 @@ class Go2Env(MujocoEnv, utils.EzPickle):
 
         self.set_state(qpos, qvel)
 
-        self.init_joint_velocity = qvel[6:].flat.copy()        
-        self.init_joint_cmd = qpos[7:].flat.copy()       
+        self.init_joint_velocity = qvel[6:].flat.copy()
+        self.init_joint_cmd = qpos[7:].flat.copy()
 
         self.revert_sign_abduction(self.init_joint_velocity)
         self.revert_sign_abduction(self.init_joint_cmd)
-        
+
         self.prev_joint_acceleration = np.zeros(12)
-        self.prev_joint_velocity = self.init_joint_velocity.flat.copy()        
+        self.prev_joint_velocity = self.init_joint_velocity.flat.copy()
         self.prev_joint_cmd = self.init_joint_cmd.flat.copy()
-         
+
         observation = self._get_obs()
 
         return observation
