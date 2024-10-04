@@ -3,16 +3,16 @@ import os
 import sys
 import shutil
 
+dirname = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+sys.path.append(dirname)
+sys.path.append(os.getcwd())
+
 import gymnasium as gym
 import numpy as np
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3 import SAC, TD3, A2C
-
-dirname = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
-sys.path.append(dirname)
-sys.path.append(os.getcwd())
-
+from src.mygym.envs.mujoco import unitree_go2
 
 # Create directories to hold models and logs
 model_dir = "models"
@@ -81,9 +81,9 @@ def test(env: VecEnv, sb3_algo: str, path_to_model: str):
 
 if __name__ == "__main__":
     gymenv = make_vec_env("GO2-v1", n_envs=1)
-    # train(gymenv, 'TD3', modelname='GO2-exprewards-240906-TD3')
+    # train(gymenv, "TD3", modelname="GO2-exprewards-240906-TD3")
     test(
         gymenv,
         sb3_algo="TD3",
-        path_to_model="models/GO2-exprewards-240906-TD3/TD3_320000.zip",
+        path_to_model="models/GO2-exprewards-240906-TD3/TD3_4180000.zip",
     )

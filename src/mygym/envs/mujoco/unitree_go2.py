@@ -29,7 +29,10 @@ DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
 
-OBSERVATION_DIMS = 56 + 24
+OBSERVATION_DIMS = 56 + 25
+
+# phase duration (desired duration for 1 step) in seconds
+PHASE_DURATION = 0.75
 
 
 class Go2Env(MujocoEnv, utils.EzPickle):
@@ -122,10 +125,12 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         xml_file=UNITREE_GO2_PATH,
         x_velocity_desired=0.3,
         balance_reward_weight=10.0,
-        forward_reward_weight=2.0,
+        forward_reward_weight=8.0,
         ctrl_cost_weight=0.1,
         safety_reward_weight=0.1,
         smooth_reward_weight=0.1,
+        step_phase_reward_weight=10.0,
+        phase_duration=PHASE_DURATION,
         reset_noise_scale=0.05,
         init_qpos=init_qpos,
         **kwargs,
@@ -139,6 +144,7 @@ class Go2Env(MujocoEnv, utils.EzPickle):
             ctrl_cost_weight,
             safety_reward_weight,
             smooth_reward_weight,
+            step_phase_reward_weight,
             reset_noise_scale,
             **kwargs,
         )
@@ -149,11 +155,15 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         self._ctrl_cost_weight = ctrl_cost_weight
         self._safety_reward_weight = safety_reward_weight
         self._smooth_reward_weight = smooth_reward_weight
+        self._step_phase_reward_weight = step_phase_reward_weight
         # noise
         self._reset_noise_scale = reset_noise_scale
+        # other params
+        self._phase_duration = phase_duration
         # additional observation
         self.prev_joint_velocity = np.zeros(12)
         self.prev_joint_acceleration = np.zeros(12)
+        self.phase_percent = 0.0
         self.dim_obs = OBSERVATION_DIMS
         # init prev cmd
         self.count_after_reset = 0
@@ -217,9 +227,7 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         smoothness_penalty_acc = np.sqrt(np.sum(np.square(self.joint_accleration)))
         smoothness_penalty_vel = np.sqrt(np.sum(np.square(self.joint_velocity)))
         smoothness_penalty = smoothness_penalty_acc + 0.1 * smoothness_penalty_vel
-        # print(f"smoothness_penalty:{smoothness_penalty}")
         smooth_reward = np.exp(-self._smooth_reward_weight * smoothness_penalty)
-        # print(f"smooth_reward:{smooth_reward}")
         return smooth_reward
 
     def safety_reward(self):
@@ -236,15 +244,17 @@ class Go2Env(MujocoEnv, utils.EzPickle):
             )
             if (dist_to_limit - 0.1) < 0:
                 safety_reward -= (1 - 10 * dist_to_limit) ** 2
-        # print(f"first_Safety Reward: {safety_reward}")
 
         safety_reward = np.exp(self._safety_reward_weight * safety_reward)
-        # print(f"final_Safety Reward: {safety_reward}")
         return safety_reward
+    
+    def step_phase_reward(self):
+        on_floor = np.isclose(self.data.sensordata[52:], np.zeros(4))
+        desired_on_floor = np.array([self.phase_percent < 0.5, self.phase_percent >= 0.5, 0.25 <= self.phase_percent < 0.75, -0.25 <= self.phase_percent - 0.5 < 0.25])
+        return np.exp(self._safety_reward_weight / 2 * np.sum(np.logical_and(on_floor, desired_on_floor)))
 
     def step(self, actions):
         self.count_after_reset += 1
-        observation = self._get_obs()
         despos = self.prev_joint_cmd + actions * self.dt
         x_position_before = self.data.qpos[0]
         self.do_simulation(despos, self.frame_skip)
@@ -257,11 +267,12 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         balance_reward, dr, dz = self.balance_reward()
         smooth_control_reward = self.smooth_control_reward()
         safety_reward = self.safety_reward()
-        no_temination_reward = np.exp(self.count_after_reset)
+        step_phase_reward = self.step_phase_reward()
+        no_termination_reward = np.exp(self.count_after_reset)
 
         observation = self._get_obs()
-        reward = balance_reward * forward_reward * ctrl_cost * safety_reward
-        # * smooth_control_reward * no_temination_reward
+        reward = balance_reward * forward_reward * ctrl_cost * safety_reward * step_phase_reward
+        # * smooth_control_reward * no_termination_reward
 
         info = {
             "x_position": x_position_after,
@@ -279,10 +290,10 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         terminated = False
         if dz > 0.25:
             terminated = True
-            print("dz =", dz)
+            # print("dz =", dz)
         if dr > 0.75:
             terminated = True
-            print("dr =", dr)
+            # print("dr =", dr)
 
         return observation, reward, terminated, False, info
 
@@ -299,7 +310,8 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         qpos = sensordata[:12]  # qpos shape: (12,)
         qvel = sensordata[12:24]  # qvel shape: (12,)
         qtrq = sensordata[24:36]  # trq shape: (12,)
-        imu = sensordata[36:]  # imu shape: (16,)
+        imu = sensordata[36:52]  # imu shape: (16,)
+        touch = sensordata[52:]  # touch shape: (4,)
 
         observation = np.concatenate(
             (
@@ -307,8 +319,10 @@ class Go2Env(MujocoEnv, utils.EzPickle):
                 qvel,
                 qtrq,
                 imu,
+                touch,
                 self.prev_joint_velocity,
                 self.prev_joint_acceleration,
+                [self.phase_percent],
             )
         ).ravel()
 
@@ -323,6 +337,7 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         self.prev_joint_cmd = pos_cmd.flat.copy()
         self.prev_joint_velocity = self.joint_velocity.flat.copy()
         self.prev_joint_acceleration = self.joint_accleration.flat.copy()
+        self.phase_percent = (self.phase_percent + self.dt / self._phase_duration) % 1
 
     def reset_model(self):
         self.count_after_reset = 0
