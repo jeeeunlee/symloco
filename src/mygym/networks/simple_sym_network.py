@@ -299,7 +299,10 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
 env = make_vec_env("simple_cheetah", n_envs=4)
 model = PPO(CustomActorCriticPolicy, env, verbose=1, policy_kwargs={"env": env.envs[0]})
-model.learn(100)
+iter=0
+while iter < 10:
+    model.learn(5000)
+    iter = iter+1
 
 obs = env.reset()
 done = False

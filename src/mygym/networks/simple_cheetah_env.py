@@ -15,12 +15,15 @@ DEFAULT_CAMERA_CONFIG = {
     "lookat": np.array((0.0, 0.0, 0.12250000000000005)),
 }
 
-DEFAULT_VELOCITY_TRAJECTORY = [
-    (0.3, 0.0),  # forward at 0.3m/s
-    (0.0, 0.1),  # right at 0.1m/s
-    (-0.3, 0.0),  # backward at 0.3m/s
-    (0.0, -0.1),  # left at 0.1m/s
-]
+# DEFAULT_VELOCITY_PROFILE = [
+#     (2, 0.0),  # forward at 0.3m/s
+#     (-2, 0.0),  # backward at 0.3m/s
+# ]
+
+DEFAULT_VELOCITY_PROFILE = {
+    "freq": (0.1, 0.1), # 0.2Hz
+     "mag" : (2, -0.3), # 2m/s
+}
 
 
 # symmetric inverted double pendulm
@@ -47,7 +50,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
-        velocity_trajectory=None,
+        velocity_profile=None,
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.1,
         reset_noise_scale=0.1,
@@ -61,16 +64,17 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
             **kwargs,
         )
 
-        self._velocity_trajectory = (
-            velocity_trajectory
-            if velocity_trajectory is not None
-            else DEFAULT_VELOCITY_TRAJECTORY
+        self._velocity_profile = (
+            velocity_profile
+            if velocity_profile is not None
+            else DEFAULT_VELOCITY_PROFILE
         )
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
         self._reset_noise_scale = reset_noise_scale
 
         self._time = 0
+        self.target_velocity = self.get_target_velocity(self._time)
 
         observation_space = Box(low=-np.inf, high=np.inf, shape=(20,), dtype=np.float64)
 
@@ -85,20 +89,24 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
 
         self.init_sym_structure_param()
 
-    @property
-    def target_velocity(self) -> tuple[float, float]:
+    def get_target_velocity(self, t=0.): # -> tuple[float, float]
         assert (
-            self._velocity_trajectory is not None and len(self._velocity_trajectory) > 0
+            self._velocity_profile is not None and len(self._velocity_profile) > 0
         ), "Invalid velocity trajectory"
-        return self._velocity_trajectory[0]
+        mag = self._velocity_profile["mag"]
+        freq = self._velocity_profile["freq"]
+        x_d = mag[0] * np.sin(2.* np.pi * freq[0]*t)
+        ry_d = mag[1] * np.sin(2.* np.pi * freq[1]*t)
+        return np.array([x_d, ry_d])
+        # return self._velocity_profile[1]
 
     def control_cost(self, action):
         control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
         return control_cost
 
     def movement_reward(self, xz_velocity):
-        if self._time % 5 + self.dt > 5:
-            self._velocity_trajectory.append(self._velocity_trajectory.pop(0))
+        # if self._time % 5 + self.dt > 5:
+        #     self._velocity_profile.append(self._velocity_profile.pop(0))
         return self._forward_reward_weight * np.linalg.norm(
             self.target_velocity - xz_velocity
         )
@@ -108,13 +116,14 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         self.do_simulation(action, self.frame_skip)
         xz_position_after = self.data.qpos[[0, 2]]
         xz_velocity = (xz_position_after - xz_position_before) / self.dt
+        self.target_velocity = self.get_target_velocity(self._time)
 
         ctrl_cost = self.control_cost(action)
 
         movement_reward = self.movement_reward(xz_velocity)
 
         observation = self._get_obs()
-        reward = movement_reward - ctrl_cost
+        reward = - movement_reward - ctrl_cost
 
         self._time += self.dt
 
@@ -122,7 +131,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         info = {
             "xz_position": xz_position_after,
             "xz_velocity": xz_velocity,
-            "reward_run": movement_reward,
+            "reward_run": -movement_reward,
             "reward_ctrl": -ctrl_cost,
             "target_velocity": self.target_velocity,
         }
@@ -174,13 +183,13 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         bfoot_vel = feature[:, 12:15]  # Shape [n, 3]
         ffoot_vel = feature[:, 15:18]  # Shape [n, 3]
 
-        target_vel = feature[:, 18:20]  # Shape [n, 2]
+        target_vel = feature[:, 18]  # Shape [n, 2]
 
         feature_left = th.cat(
             [rootx, rootz, rooty, bfoot_pos, bfoot_vel, target_vel], dim=1
         )
         feature_right = th.cat(
-            [-rootx, rootz, -rooty, -ffoot_pos, -ffoot_vel, target_vel], dim=1
+            [-rootx, rootz, -rooty, -ffoot_pos, -ffoot_vel, -target_vel], dim=1
         )
         structured_features = th.stack([feature_left, feature_right], dim=1)
         return structured_features
