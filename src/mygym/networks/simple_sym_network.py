@@ -111,8 +111,8 @@ class ReflectionNetwork(nn.Module):
         # env
         self.env = env
         # do later
-        self.restructured_feature_dim = env.restructured_feature_dim
-        self.restructured_action_dim = env.restructured_action_dim
+        self.restructured_feature_dim = env.unwrapped.restructured_feature_dim
+        self.restructured_action_dim = env.unwrapped.restructured_action_dim
 
         # IMPORTANT:
         # Save output dimensions, used to create the distributions
@@ -136,22 +136,26 @@ class ReflectionNetwork(nn.Module):
         return self.forward_actor(features), self.forward_critic(features)
 
     def forward_actor(self, features: th.Tensor) -> th.Tensor:  # shape [n,21]
-        features_set = self.env.restruct_features_fn(features)  # shape [n,2,14]
+        features_set = self.env.unwrapped.restruct_features_fn(
+            features
+        )  # shape [n,2,14]
         return self.policy_net(features_set)
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:  # shape [n,21]
-        features_set = self.env.restruct_features_fn(features)  # shape [n,2,14]
+        features_set = self.env.unwrapped.restruct_features_fn(
+            features
+        )  # shape [n,2,14]
         return self.value_net(features_set)
 
 
 class ReflectionLinearNetwork(nn.Module):
     def __init__(self, env: Union[GymEnv, str], latent_dim: int):
         super().__init__()
-        self.restruct_features_fn = env.restruct_features_fn
-        self.destruct_actions_fn = env.destruct_actions_fn
+        self.restruct_features_fn = env.unwrapped.restruct_features_fn
+        self.destruct_actions_fn = env.unwrapped.destruct_actions_fn
         # do later
-        self.restructured_feature_dim = env.restructured_feature_dim
-        self.restructured_action_dim = env.restructured_action_dim
+        self.restructured_feature_dim = env.unwrapped.restructured_feature_dim
+        self.restructured_action_dim = env.unwrapped.restructured_action_dim
 
         self.output_net = nn.Linear(latent_dim, self.restructured_action_dim)
 
@@ -183,8 +187,8 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
     ):
         self.env = kwargs["env"]
         # additional
-        self.restructured_feature_dim = self.env.restructured_feature_dim
-        self.restructured_action_dim = self.env.restructured_action_dim
+        self.restructured_feature_dim = self.env.unwrapped.restructured_feature_dim
+        self.restructured_action_dim = self.env.unwrapped.restructured_action_dim
 
         self.action_dim = get_action_dim(action_space)
 
@@ -297,23 +301,23 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         return actions, values, log_prob
 
 
-env = make_vec_env("simple_cheetah", n_envs=4)
-model = PPO(CustomActorCriticPolicy, env, verbose=1, policy_kwargs={"env": env.envs[0]})
-iter=0
-while iter < 10:
-    model.learn(5000)
-    iter = iter+1
+# env = make_vec_env("simple_cheetah", n_envs=4)
+# model = PPO(CustomActorCriticPolicy, env, verbose=1, policy_kwargs={"env": env.envs[0]})
+# iter=0
+# while iter < 10:
+#     model.learn(5000)
+#     iter = iter+1
 
-obs = env.reset()
-done = False
-n_envs = env.num_envs
-extra_steps = [500] * n_envs
-while True:
-    action, states = model.predict(obs)
-    obs, rewards, dones, info = env.step(action)
-    env.render("human")
-    for i, done in enumerate(dones):
-        if done:
-            extra_steps[i] -= 1
-        if extra_steps[i] < 0:
-            break
+# obs = env.reset()
+# done = False
+# n_envs = env.num_envs
+# extra_steps = [500] * n_envs
+# while True:
+#     action, states = model.predict(obs)
+#     obs, rewards, dones, info = env.step(action)
+#     env.render("human")
+#     for i, done in enumerate(dones):
+#         if done:
+#             extra_steps[i] -= 1
+#         if extra_steps[i] < 0:
+#             break

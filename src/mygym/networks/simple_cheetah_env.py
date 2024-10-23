@@ -15,14 +15,9 @@ DEFAULT_CAMERA_CONFIG = {
     "lookat": np.array((0.0, 0.0, 0.12250000000000005)),
 }
 
-# DEFAULT_VELOCITY_PROFILE = [
-#     (2, 0.0),  # forward at 0.3m/s
-#     (-2, 0.0),  # backward at 0.3m/s
-# ]
-
 DEFAULT_VELOCITY_PROFILE = {
-    "freq": (0.1, 0.1), # 0.2Hz
-     "mag" : (2, -0.3), # 2m/s
+    "freq": (0.1, 0.1),  # 0.2Hz
+    "mag": (2, -0.3),  # 2m/s
 }
 
 
@@ -58,6 +53,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
     ):
         utils.EzPickle.__init__(
             self,
+            velocity_profile,
             forward_reward_weight,
             ctrl_cost_weight,
             reset_noise_scale,
@@ -89,24 +85,21 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
 
         self.init_sym_structure_param()
 
-    def get_target_velocity(self, t=0.): # -> tuple[float, float]
+    def get_target_velocity(self, t=0.0):  # -> tuple[float, float]
         assert (
             self._velocity_profile is not None and len(self._velocity_profile) > 0
         ), "Invalid velocity trajectory"
         mag = self._velocity_profile["mag"]
         freq = self._velocity_profile["freq"]
-        x_d = mag[0] * np.sin(2.* np.pi * freq[0]*t)
-        ry_d = mag[1] * np.sin(2.* np.pi * freq[1]*t)
+        x_d = mag[0] * np.sin(2.0 * np.pi * freq[0] * t)
+        ry_d = mag[1] * np.sin(2.0 * np.pi * freq[1] * t)
         return np.array([x_d, ry_d])
-        # return self._velocity_profile[1]
 
     def control_cost(self, action):
         control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
         return control_cost
 
     def movement_reward(self, xz_velocity):
-        # if self._time % 5 + self.dt > 5:
-        #     self._velocity_profile.append(self._velocity_profile.pop(0))
         return self._forward_reward_weight * np.linalg.norm(
             self.target_velocity - xz_velocity
         )
@@ -123,7 +116,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         movement_reward = self.movement_reward(xz_velocity)
 
         observation = self._get_obs()
-        reward = - movement_reward - ctrl_cost
+        reward = -movement_reward - ctrl_cost
 
         self._time += self.dt
 
@@ -143,9 +136,6 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
     def _get_obs(self):
         position = self.data.qpos.flat.copy()
         velocity = self.data.qvel.flat.copy()
-
-        # if self._exclude_current_positions_from_observation:
-        #     position = position[1:]
 
         observation = np.concatenate((position, velocity, self.target_velocity)).ravel()
         return observation
@@ -169,7 +159,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         return observation
 
     def init_sym_structure_param(self):
-        self.restructured_feature_dim = 14  # 6 for body + 6 for leg + 2 for target vel
+        self.restructured_feature_dim = 13  # 6 for body + 6 for leg + 1 for target vel
         self.restructured_action_dim = 3  # 3x2(left, right)
 
     def restruct_features_fn(self, feature):
@@ -183,11 +173,12 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         bfoot_vel = feature[:, 12:15]  # Shape [n, 3]
         ffoot_vel = feature[:, 15:18]  # Shape [n, 3]
 
-        target_vel = feature[:, 18]  # Shape [n, 2]
+        target_vel = feature[:, 18][:, np.newaxis]  # Shape [n, 2]
 
         feature_left = th.cat(
             [rootx, rootz, rooty, bfoot_pos, bfoot_vel, target_vel], dim=1
         )
+
         feature_right = th.cat(
             [-rootx, rootz, -rooty, -ffoot_pos, -ffoot_vel, -target_vel], dim=1
         )
