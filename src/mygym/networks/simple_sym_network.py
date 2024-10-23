@@ -3,7 +3,7 @@ import sys
 
 sys.path.append(os.getcwd())
 
-from typing import Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Callable, Tuple, Union
 from collections import OrderedDict
 from functools import partial
 
@@ -12,14 +12,10 @@ import torch as th
 from torch import nn
 import numpy as np
 
-from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticPolicy
-from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
-from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.type_aliases import Schedule
 from stable_baselines3.common.type_aliases import GymEnv
 from stable_baselines3.common.preprocessing import get_action_dim
-
-import src.mygym.networks
 
 # default
 LATENT_SIZE = 64
@@ -299,25 +295,3 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         log_prob = distribution.log_prob(actions)
         actions = actions.reshape((-1, *self.action_space.shape))  # type: ignore[misc]
         return actions, values, log_prob
-
-
-# env = make_vec_env("simple_cheetah", n_envs=4)
-# model = PPO(CustomActorCriticPolicy, env, verbose=1, policy_kwargs={"env": env.envs[0]})
-# iter=0
-# while iter < 10:
-#     model.learn(5000)
-#     iter = iter+1
-
-# obs = env.reset()
-# done = False
-# n_envs = env.num_envs
-# extra_steps = [500] * n_envs
-# while True:
-#     action, states = model.predict(obs)
-#     obs, rewards, dones, info = env.step(action)
-#     env.render("human")
-#     for i, done in enumerate(dones):
-#         if done:
-#             extra_steps[i] -= 1
-#         if extra_steps[i] < 0:
-#             break

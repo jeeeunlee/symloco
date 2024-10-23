@@ -1,6 +1,8 @@
 import os
 import shutil
 from time import sleep
+import argparse
+from typing import Any
 
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3 import SAC, TD3, A2C, PPO
@@ -8,7 +10,14 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.logger import configure
 
 
-def make_model(env: VecEnv, sb3_algo: str, *, log_dir: str) -> BaseAlgorithm:
+def get_args(prog_name: str) -> dict[str, Any]:
+    parser = argparse.ArgumentParser(prog=prog_name)
+    parser.add_argument("mode", choices=["train", "test"])
+    parser.add_argument("-mp", "--model-path", nargs=1, type=argparse.FileType("rb"))
+    return parser.parse_args()
+
+
+def make_model(env: VecEnv, sb3_algo: str, *, log_dir: str = "logs") -> BaseAlgorithm:
     match sb3_algo:
         case "SAC":
             return SAC(
@@ -63,7 +72,7 @@ def train(
     iters = 0
     while max_iters is None or iters < max_iters:
         iters += 1
-        model.learn(total_timesteps=n_timesteps, reset_num_timesteps=True)
+        model.learn(total_timesteps=n_timesteps)
         model.save(f"{model_dir}/{model_name}/{sb3_algo}_{n_timesteps * iters}")
 
 

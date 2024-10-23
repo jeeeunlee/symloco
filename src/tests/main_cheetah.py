@@ -1,6 +1,5 @@
 import os
 import sys
-import argparse
 import io
 
 dirname = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
@@ -11,7 +10,7 @@ from stable_baselines3.common.vec_env import VecEnv  # noqa: E402
 from stable_baselines3.common.env_util import make_vec_env  # noqa: E402
 from stable_baselines3 import PPO  # noqa: E402
 from src.mygym.networks.simple_sym_network import CustomActorCriticPolicy  # noqa: E402
-from src.tests.test_utils import train as _train, test as _test, load_model  # noqa: E402
+from src.tests.test_utils import train as _train, test as _test, load_model, get_args  # noqa: E402
 
 
 SB3_ALGO = "PPO"
@@ -39,11 +38,7 @@ def test(model_path: io.BytesIO):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="main_cheetah")
-    parser.add_argument("mode", choices=["train", "test"])
-    parser.add_argument("-mp", "--model-path", nargs=1, type=argparse.FileType("rb"))
-    args = parser.parse_args()
-
+    args = get_args("main_cheetah")
     if args.mode == "train":
         train()
     else:
