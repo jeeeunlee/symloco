@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.append(os.getcwd())
 
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union
@@ -61,7 +62,6 @@ class CustomNetwork(nn.Module):
         return self.value_net(features)
 
 
-
 class CustomActorCriticPolicy(ActorCriticPolicy):
     def __init__(
         self,
@@ -82,11 +82,12 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
             **kwargs,
         )
 
-
     def _build_mlp_extractor(self) -> None:
         self.mlp_extractor = CustomNetwork(self.features_dim)
 
-    def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
+    def forward(
+        self, obs: th.Tensor, deterministic: bool = False
+    ) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
         Forward pass in all the networks (actor and critic)
 
@@ -110,24 +111,21 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         actions = actions.reshape((-1, *self.action_space.shape))  # type: ignore[misc]
         return actions, values, log_prob
 
-env = make_vec_env("simple_cheetah", n_envs=4) #simple_idp
-model = PPO(CustomActorCriticPolicy, env , verbose=1)
-model.learn(100)
 
-obs = env.reset()
-done = False
-n_envs = env.num_envs
-extra_steps = [500]*n_envs
-while True:
-    action, states = model.predict(obs)
-    obs, rewards, dones, info = env.step(action)        
-    env.render("human")
-    for i, done in enumerate(dones):
-        if done:
-            extra_steps[i] -= 1
-        if extra_steps[i] < 0:
-            break
+# env = make_vec_env("simple_cheetah", n_envs=4) #simple_idp
+# model = PPO(CustomActorCriticPolicy, env , verbose=1)
+# model.learn(100)
 
-
-
-
+# obs = env.reset()
+# done = False
+# n_envs = env.num_envs
+# extra_steps = [500]*n_envs
+# while True:
+#     action, states = model.predict(obs)
+#     obs, rewards, dones, info = env.step(action)
+#     env.render("human")
+#     for i, done in enumerate(dones):
+#         if done:
+#             extra_steps[i] -= 1
+#         if extra_steps[i] < 0:
+#             break
