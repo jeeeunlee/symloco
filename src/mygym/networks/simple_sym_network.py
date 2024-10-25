@@ -293,7 +293,3 @@ while True:
             extra_steps[i] -= 1
         if extra_steps[i] < 0:
             break
-
-
-
-

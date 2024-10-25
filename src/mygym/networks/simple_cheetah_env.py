@@ -129,27 +129,29 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         self.restructured_feature_dim = 12 # 6 for body + 6 for leg
         self.restructured_action_dim = 3 # 3x2(left, right)
 
-    def restruct_features_fn(self, feature):
-        # feature shape [n,18]
+    def restruct_features_fn(self, 
+            feature: th.Tensor # Shape [n,18]
+            ) -> th.Tensor: # Shape [n,18]
         rootx = feature[:, [0, 9]]  # Shape [n, 2]
         rootz = feature[:, [1, 10]] # Shape [n, 2]
         rooty = feature[:, [2, 11]] # Shape [n, 2]
-
         bfoot_pos = feature[:, 3:6]  # Shape [n, 3]
         ffoot_pos = feature[:, 6:9]  # Shape [n, 3]
         bfoot_vel = feature[:, 12:15]  # Shape [n, 3]
         ffoot_vel = feature[:, 15:18]  # Shape [n, 3]
 
-
         feature_left = th.cat([rootx, rootz, rooty, 
-                               bfoot_pos, bfoot_vel],dim=1)
+            bfoot_pos, bfoot_vel],dim=1) # Shape [n, 12]
         feature_right = th.cat([-rootx, rootz, -rooty, 
-                                -ffoot_pos, -ffoot_vel],dim=1)
-        structured_features = th.stack([feature_left, feature_right], dim=1)
-        return structured_features
+            -ffoot_pos, -ffoot_vel],dim=1) # Shape [n, 12]
+        structured_features = th.stack(
+            [feature_left, feature_right], dim=1) # Shape [n, 2, 12]
+        return structured_features # Shape [n, 2, 12]
 
 
-    def destruct_actions_fn(self, structured_actions): # shape [n,2,3]
+    def destruct_actions_fn(self, 
+            structured_actions: th.Tensor # shape [n,2,3]
+            )-> th.Tensor: # shape [n,2,3]
         actions = th.cat((structured_actions[:,0,:], 
                         structured_actions[:,1,:]),dim=1)
         return actions # shape [n,6]
