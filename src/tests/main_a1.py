@@ -1,81 +1,46 @@
 import os
 import sys
-# add path home/jelee/my_ws/RL/symloco/src
+import io
+
 dirname = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
-# print(dirname)
 sys.path.append(dirname)
-import mygym.envs.mujoco
-import gymnasium as gym
-import numpy as np
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv
-from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3 import SAC, TD3, A2C, PPO
-import os
+sys.path.append(os.getcwd())
+
+from stable_baselines3.common.vec_env import VecEnv  # noqa: E402
+from stable_baselines3.common.env_util import make_vec_env  # noqa: E402
+from src.tests.test_utils import (  # noqa: E402
+    train as _train,
+    test as _test,
+    make_model,
+    load_model,
+    get_args,
+)
+from src.mygym.envs.mujoco import unitree_a1  # noqa: F401, E402
 
 
-# Create directories to hold models and logs
-model_dir = "models"
-# log_dir = "logs"
-
-os.makedirs(model_dir, exist_ok=True)
-# os.makedirs(log_dir, exist_ok=True)
-def train(env:VecEnv, sb3_algo, modelname=''):
-    log_dir = f"logs/{modelname}"
-    os.makedirs(log_dir, exist_ok=True)
-
-    match sb3_algo:
-        case 'SAC':
-            model = SAC('MlpPolicy', env, verbose=1, device='cuda', tensorboard_log=log_dir)
-        case 'TD3':
-            model = TD3('MlpPolicy', env, verbose=1, device='cuda', tensorboard_log=log_dir)
-        case 'A2C':
-            model = A2C('MlpPolicy', env, verbose=1, device='cuda', tensorboard_log=log_dir)
-        case _:
-            print('Algorithm not found')
-            return
-
-    TIMESTEPS = 5000
-    iters = 0
-    while True:
-        iters += 1
-
-        model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=True)
-        model.save(f"{model_dir}/{modelname}/{sb3_algo}_{TIMESTEPS*iters}")
-
-def test(env:VecEnv,
-         sb3_algo:str, 
-         path_to_model:str):
-
-    match sb3_algo:
-        case 'SAC':
-            model = SAC.load(path_to_model, env=env)
-        case 'TD3':
-            model = TD3.load(path_to_model, env=env)
-        case 'A2C':
-            model = A2C.load(path_to_model, env=env)
-        case _:
-            print('Algorithm not found')
-            return
-
-    obs = env.reset()
-    done = False
-    n_envs = env.num_envs
-    extra_steps = [500]*n_envs
-    while True:
-        action, states = model.predict(obs)
-        obs, rewards, dones, info = env.step(action)        
-        env.render("human")
-        for i, done in enumerate(dones):
-            if done:
-                extra_steps[i] -= 1
-            if extra_steps[i] < 0:
-                break
+SB3_ALGO = "SAC"
 
 
-if __name__ == '__main__':
+def _make_env() -> VecEnv:
+    return make_vec_env("A1-v1", n_envs=4)
 
-    # gymenv = gym.make('Humanoid-v4', render_mode='human')
-    gymenv = make_vec_env('A1-v1', n_envs=4)
-    train(gymenv, 'SAC', modelname='A1-240831')
 
-    # test(gymenv, sb3_algo='SAC', path_to_model='models/A1-240717/SAC_5000.zip')
+def train():
+    env = _make_env()
+    model = make_model(env, SB3_ALGO)
+    _train(model, SB3_ALGO, n_timesteps=10000, max_iters=10)
+
+
+def test(model_path: io.BytesIO):
+    env = _make_env()
+    model = load_model(env, model_path, SB3_ALGO)
+    _test(model, env, fps=env.metadata["render_fps"])
+
+
+if __name__ == "__main__":
+    args = get_args("main_a1")
+    if args.mode == "train":
+        train()
+    else:
+        assert len(args.model_path) == 1, "Model file required for testing"
+        test(args.model_path[0])
