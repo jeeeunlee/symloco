@@ -1,5 +1,6 @@
 import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
 import os
 
 LOGS_DIR = "logs"
@@ -21,6 +22,7 @@ if __name__ == "__main__":
     ax = sns.lineplot(
         x="time/total_timesteps", y="rollout/ep_rew_mean", hue="test_name", data=df
     )
-    ax.set(title="Reward over time", xlabel="timesteps", ylabel="reward")
+    ax.set(title="reward over time", xlabel="timesteps", ylabel="reward")
     fig = ax.get_figure()
+    plt.tight_layout()
     fig.savefig(f"{LOGS_DIR}/reward_plot.png")

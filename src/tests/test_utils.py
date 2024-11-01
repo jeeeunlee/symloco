@@ -14,7 +14,7 @@ def get_args(prog_name: str) -> dict[str, Any]:
     parser = argparse.ArgumentParser(prog=prog_name)
     parser.add_argument("mode", choices=["train", "test"])
     parser.add_argument("-n", "--model-name", nargs=1, type=str)
-    parser.add_argument("-c", "--use-custom-policy", action="store_true")
+    parser.add_argument("-c", "--use-sym-policy", action="store_true")
     parser.add_argument("-mp", "--model-path", nargs=1, type=argparse.FileType("rb"))
     return parser.parse_args()
 
