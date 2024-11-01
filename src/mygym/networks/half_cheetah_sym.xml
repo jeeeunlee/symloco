@@ -31,6 +31,10 @@
         - fshin     hinge       torque (N m)
         - ffoot     hinge       torque (N m)
 
+    Sensors (name/parameter):
+        - ftouch    force (N)
+        - btouch    force (N)
+
 -->
 <mujoco model="cheetah">
   <compiler angle="radian" coordinate="local" inertiafromgeom="true" settotalmass="14"/>
@@ -68,6 +72,7 @@
           <body name="bfoot" pos="-.28 0 -.14">
             <joint axis="0 1 0" damping="3" name="bfoot" pos="0 0 0" range="-.4 .785" stiffness="120" type="hinge"/>
             <geom axisangle="0 1 0 -.27" name="bfoot" pos=".03 0 -.097" rgba="0.9 0.6 0.6 1" size="0.046 .094" type="capsule"/>
+            <site name="bfoot" pos="0 0 0" />
           </body>
         </body>
       </body>
@@ -90,6 +95,7 @@
           <body name="ffoot" pos=".28 0 -.14">
             <joint axis="0 1 0" damping="3" name="ffoot" pos="0 0 0" range="-.4 .785" stiffness="120" type="hinge"/>
             <geom axisangle="0 1 0 .27" name="ffoot" pos="-.03 0 -.097" rgba="0.9 0.6 0.6 1" size="0.046 .094" type="capsule"/>
+            <site name="ffoot" pos="0 0 0" />
           </body>
         </body>
       </body>
@@ -103,4 +109,8 @@
     <motor gear="90" joint="fshin" name="fshin"/>
     <motor gear="60" joint="ffoot" name="ffoot"/>
   </actuator>
+  <sensor>
+    <touch name="ftouch" noise="0.01" site="ffoot" />
+    <touch name="btouch" noise="0.01" site="bfoot" />
+  </sensor>
 </mujoco>

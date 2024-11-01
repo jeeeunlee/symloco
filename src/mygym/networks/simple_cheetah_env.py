@@ -20,6 +20,8 @@ DEFAULT_VELOCITY_PROFILE = {
     "mag": (2, -0.3),  # 2m/s
 }
 
+TOUCH_SENSOR_NOISE = 0.01
+
 
 # symmetric inverted double pendulm
 
@@ -48,6 +50,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         velocity_profile=None,
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.1,
+        foot_phase_weight=0.05,
         reset_noise_scale=0.1,
         **kwargs,
     ):
@@ -56,6 +59,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
             velocity_profile,
             forward_reward_weight,
             ctrl_cost_weight,
+            foot_phase_weight,
             reset_noise_scale,
             **kwargs,
         )
@@ -67,12 +71,13 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         )
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
+        self._foot_phase_weight = foot_phase_weight
         self._reset_noise_scale = reset_noise_scale
 
         self._time = 0
         self.target_velocity = self.get_target_velocity(self._time)
 
-        observation_space = Box(low=-np.inf, high=np.inf, shape=(20,), dtype=np.float64)
+        observation_space = Box(low=-np.inf, high=np.inf, shape=(22,), dtype=np.float64)
 
         MujocoEnv.__init__(
             self,
@@ -99,9 +104,14 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
         return control_cost
 
-    def movement_reward(self, xz_velocity):
+    def movement_cost(self, xz_velocity):
         return self._forward_reward_weight * np.linalg.norm(
             self.target_velocity - xz_velocity
+        )
+
+    def foot_phase_cost(self, ftouch, btouch):
+        return self._foot_phase_weight * int(
+            (ftouch <= TOUCH_SENSOR_NOISE) != (btouch <= TOUCH_SENSOR_NOISE)
         )
 
     def step(self, action):
@@ -109,14 +119,15 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         self.do_simulation(action, self.frame_skip)
         xz_position_after = self.data.qpos[[0, 2]]
         xz_velocity = (xz_position_after - xz_position_before) / self.dt
+        sensordata = self.data.sensordata.flat.copy()
         self.target_velocity = self.get_target_velocity(self._time)
 
         ctrl_cost = self.control_cost(action)
-
-        movement_reward = self.movement_reward(xz_velocity)
+        movement_cost = self.movement_cost(xz_velocity)
+        foot_phase_cost = self.foot_phase_cost(sensordata[0], sensordata[1])
 
         observation = self._get_obs()
-        reward = -movement_reward - ctrl_cost
+        reward = -movement_cost - ctrl_cost - foot_phase_cost
 
         self._time += self.dt
 
@@ -124,7 +135,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         info = {
             "xz_position": xz_position_after,
             "xz_velocity": xz_velocity,
-            "reward_run": -movement_reward,
+            "reward_run": -movement_cost,
             "reward_ctrl": -ctrl_cost,
             "target_velocity": self.target_velocity,
         }
@@ -136,8 +147,11 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
     def _get_obs(self):
         position = self.data.qpos.flat.copy()
         velocity = self.data.qvel.flat.copy()
+        sensordata = self.data.sensordata.flat.copy()
 
-        observation = np.concatenate((position, velocity, self.target_velocity)).ravel()
+        observation = np.concatenate(
+            (position, velocity, sensordata, self.target_velocity)
+        ).ravel()
         return observation
 
     def reset_model(self):
@@ -159,7 +173,9 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         return observation
 
     def init_sym_structure_param(self):
-        self.restructured_feature_dim = 13  # 6 for body + 6 for leg + 1 for target vel
+        self.restructured_feature_dim = (
+            14  # 6 for body + 6 for leg + 1 for touch + 1 for target vel
+        )
         self.restructured_action_dim = 3  # 3x2(left, right)
 
     def restruct_features_fn(self, feature):
@@ -173,14 +189,17 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         bfoot_vel = feature[:, 12:15]  # Shape [n, 3]
         ffoot_vel = feature[:, 15:18]  # Shape [n, 3]
 
-        target_vel = feature[:, 18][:, np.newaxis]  # Shape [n, 2]
+        ftouch = feature[:, 18:19]  # Shape [n, 1]
+        btouch = feature[:, 19:20]  # Shape [n, 1]
+
+        target_vel = feature[:, 20:21]  # Shape [n, 1]
 
         feature_left = th.cat(
-            [rootx, rootz, rooty, bfoot_pos, bfoot_vel, target_vel], dim=1
+            [rootx, rootz, rooty, bfoot_pos, bfoot_vel, btouch, target_vel], dim=1
         )
 
         feature_right = th.cat(
-            [-rootx, rootz, -rooty, -ffoot_pos, -ffoot_vel, -target_vel], dim=1
+            [-rootx, rootz, -rooty, -ffoot_pos, -ffoot_vel, ftouch, -target_vel], dim=1
         )
         structured_features = th.stack([feature_left, feature_right], dim=1)
         return structured_features

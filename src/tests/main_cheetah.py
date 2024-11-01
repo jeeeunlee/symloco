@@ -26,12 +26,12 @@ from src.tests.test_utils import (  # noqa: E402
 SB3_ALGO = "PPO"
 
 
-def _make_env() -> VecEnv:
-    return make_vec_env("simple_cheetah", n_envs=4)
+def _make_env(n_envs: int) -> VecEnv:
+    return make_vec_env("simple_cheetah", n_envs=n_envs)
 
 
-def train(model_name: str, use_sym_policy: bool):
-    env = _make_env()
+def train(model_name: str, use_sym_policy: bool, n_envs: int):
+    env = _make_env(n_envs)
     model = (
         PPO(
             SymActorCriticPolicy,
@@ -51,8 +51,8 @@ def train(model_name: str, use_sym_policy: bool):
     _train(model, SB3_ALGO, model_name=model_name, n_timesteps=50000, max_iters=200)
 
 
-def test(model_path: io.BytesIO):
-    env = _make_env()
+def test(model_path: io.BytesIO, n_envs: int):
+    env = _make_env(n_envs)
     model = load_model(env, model_path, SB3_ALGO)
     _test(model, env, fps=env.metadata["render_fps"])
 
@@ -60,8 +60,8 @@ def test(model_path: io.BytesIO):
 if __name__ == "__main__":
     args = get_args("main_cheetah")
     if args.mode == "train":
-        assert len(args.model_name) == 1, "Must provide model name"
-        train(args.model_name[0], args.use_sym_policy)
+        assert args.model_name, "Must provide model name"
+        train(args.model_name, args.use_sym_policy, args.n_envs)
     else:
-        assert len(args.model_path) == 1, "Model file required for testing"
-        test(args.model_path[0])
+        assert args.model_path, "Model file required for testing"
+        test(args.model_path, args.n_envs)

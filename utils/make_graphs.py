@@ -9,6 +9,8 @@ LOGS_DIR = "logs"
 def make_df(logs_dir: str):
     dfs = []
     for test in next(os.walk(logs_dir))[1]:
+        if test == "old_logs":
+            continue
         test_df = pd.read_csv(f"{logs_dir}/{test}/progress.csv")
         test_df["test_name"] = test
         dfs.append(test_df)
