@@ -138,10 +138,12 @@ class A1Env(MujocoEnv, utils.EzPickle):
         self,
         xml_file=UNITREE_A1_PATH,
         balance_reward_weight=5.0,
-        forward_reward_weight=1.0,
+
+        forward_reward_weight=2.0,
         ctrl_cost_weight=0.01,
         safety_reward_weight=0.1,
-        smooth_reward_weight=0.001,
+        smooth_reward_weight=0.01,
+
         reset_noise_scale=0.1,
         **kwargs,
     ):
@@ -208,10 +210,7 @@ class A1Env(MujocoEnv, utils.EzPickle):
         r = R.from_quat(quat).as_rotvec()
         dr = np.linalg.norm(r)
         dz = (0.29 - self.data.qpos[2])
-        # balance_reward = self._balance_reward_weight * np.sum(np.square([rx,ry,rz,dz]))
         balance_reward = np.exp( - self._balance_reward_weight*np.linalg.norm([dr,dz]) )
-        # print("before_balance_reward",np.linalg.norm([dr,dz]) )
-        # print("balance_reward",balance_reward)
         return balance_reward
 
     
@@ -232,17 +231,26 @@ class A1Env(MujocoEnv, utils.EzPickle):
             }
 
             qpos = self.data.qpos[7:]
-            safety_reward = 1.0  # initial safety reward
+
+            safety_reward = 0.0  # initial safety reward
 
             for i, (joint, limits) in enumerate(joint_limits.items()):
                 if not limits[0] <= qpos[i] <= limits[1]:
                     safety_reward -= 3  # if joints out of the range then lower the reward
             # print(f"first_Safety Reward: {safety_reward}")
-            thigh_joints = ["FR_thigh_joint", "FL_thigh_joint", "RR_thigh_joint", "RL_thigh_joint"]
-            thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
-            thigh_angles = qpos[thigh_indices]
+
+            # thigh_joints = ["FR_thigh_joint", "FL_thigh_joint", "RR_thigh_joint", "RL_thigh_joint"]
+            # thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
+            # thigh_angles = qpos[thigh_indices]
 
             # Check for singularity when all joint angles are zero
+
+
+            # Check for singularity when thigh joint angles are zero
+            thigh_joints = ["FR_thigh_joint", "FL_thigh_joint", "RR_thigh_joint", "RL_thigh_joint"]
+            thigh_indices = [list(joint_limits.keys()).index(joint) for joint in thigh_joints]
+            thigh_angles = qpos[thigh_indices]            
+
             if np.allclose(thigh_angles, 0, atol=5e-2):
                 safety_reward -= 3  # penalize if all joint angles are close to zero
             # print(f"second_Safety Reward: {safety_reward}")
@@ -251,18 +259,32 @@ class A1Env(MujocoEnv, utils.EzPickle):
             return safety_reward
 
 
-    def smooth_control_reward(self, current_joint_velocities):
-        # print(f"self.current_joint_velocities:{current_joint_velocities}")      
-        current_joint_accelerations = (np.array(current_joint_velocities) - np.array(self.prev_joint_velocities))*5
+    # def smooth_control_reward(self, current_joint_velocities):
+    #     # print(f"self.current_joint_velocities:{current_joint_velocities}")      
+    #     current_joint_accelerations = (np.array(current_joint_velocities) - np.array(self.prev_joint_velocities))*5
+    #     # print(f"current_joint_accelerations:{current_joint_accelerations}")      
+
+
+    #     # calculate the change of all joints acceleration
+    #     acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
+    #     self.prev_joint_accelerations = current_joint_accelerations
+    #     smoothness_penalty = np.sum(np.square(acceleration_changes))
+    #     # smoothness_penalty = np.sum(acceleration_changes)
+    #     # print(f"smoothness_penalty:{smoothness_penalty}")
+
+    def smooth_control_reward(self, current_joint_velocities, current_joint_accelerations):
+
         # print(f"current_joint_accelerations:{current_joint_accelerations}")      
+        smoothness_penalty_acc = np.sum(np.square(current_joint_accelerations))
 
-
-        # calculate the change of all joints acceleration
+        # calculate the change of all joints acceleration        
         acceleration_changes = current_joint_accelerations - self.prev_joint_accelerations
-        self.prev_joint_accelerations = current_joint_accelerations
-        smoothness_penalty = np.sum(np.square(acceleration_changes))
-        # smoothness_penalty = np.sum(acceleration_changes)
+        smoothness_penalty_accchg = np.sum(np.square(acceleration_changes))
+
+        smoothness_penalty = 0.1*smoothness_penalty_acc + smoothness_penalty_accchg
         # print(f"smoothness_penalty:{smoothness_penalty}")
+        
+
         smooth_reward = np.exp(-smoothness_penalty * self._smooth_reward_weight)
         # print(f"smooth_reward:{smooth_reward}")
         return smooth_reward
@@ -282,14 +304,27 @@ class A1Env(MujocoEnv, utils.EzPickle):
         forward_reward = self.forward_reward(x_velocity)
         balance_reward = self.balance_reward()
         safety_reward = self.safety_reward()
-        # smooth_control_reward = self.smooth_control_reward(actions)
+        # # smooth_control_reward = self.smooth_control_reward(actions)
        
-        observation = self._get_obs()
-        current_joint_velocities = self.data.qvel[:12]
-        # print(f"current_joint_velocities:{current_joint_velocities}")
+        # observation = self._get_obs()
+        # current_joint_velocities = self.data.qvel[:12]
+        # # print(f"current_joint_velocities:{current_joint_velocities}")
 
-        smooth_control_reward = self.smooth_control_reward(current_joint_velocities)
+        # smooth_control_reward = self.smooth_control_reward(current_joint_velocities)
+        # self.prev_joint_velocities = current_joint_velocities
+        # # print(f"self.prev_joint_velocities:{self.prev_joint_velocities}")
+
+
+
+       
+        current_joint_velocities = self.data.qvel[:12]
+        current_joint_accelerations = (
+            np.array(current_joint_velocities) - np.array(self.prev_joint_velocities)) / self.dt
+
+        smooth_control_reward = self.smooth_control_reward(
+            current_joint_velocities, current_joint_accelerations)
         self.prev_joint_velocities = current_joint_velocities
+        self.prev_joint_accelerations = current_joint_accelerations
         # print(f"self.prev_joint_velocities:{self.prev_joint_velocities}")
 
 
@@ -352,7 +387,12 @@ class A1Env(MujocoEnv, utils.EzPickle):
         noise_low = -self._reset_noise_scale
         noise_high = self._reset_noise_scale
 
-        init_qpos = [0,0,0.26,1,0,0,0, 0.3,0.8,-1.6, 0.3,0.8,-1.6, 0.3,0.8,-1.6, 0.3,0.8,-1.6]
+        init_qpos = [0,0,0.26,
+                     1,0,0,0, 
+                     0.3,0.8,-1.6, 
+                     0.3,0.8,-1.6,
+                     0.3,0.8,-1.6, 
+                     0.3,0.8,-1.6]
    
 
         qpos = init_qpos + self.np_random.uniform(

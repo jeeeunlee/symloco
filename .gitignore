@@ -1,4 +1,9 @@
 logs/*
 models/*
+<<<<<<< HEAD
+=======
+src/tests/models
+src/tests/logs
+>>>>>>> b6e4cbb (THE LOSS FUNCTION)
 MUJOCO_LOG.TXT
 *.pyc

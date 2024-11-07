@@ -75,6 +75,7 @@ def test(env:VecEnv,
 if __name__ == '__main__':
 
     # gymenv = gym.make('Humanoid-v4', render_mode='human')
+<<<<<<< HEAD
 
     # ##for the pure RL learning
     # gymenv = make_vec_env('A1-v1', n_envs=4)
@@ -87,3 +88,9 @@ if __name__ == '__main__':
     train(gymenv, 'SAC', modelname='SymA1-exprewards')
 
     # test(gymenv, sb3_algo='SAC', path_to_model='models/SymA1-exprewards/SAC_845000.zip')
+=======
+    gymenv = make_vec_env('A1-v1', n_envs=4)
+    train(gymenv, 'SAC', modelname='A1-240831')
+
+    # test(gymenv, sb3_algo='SAC', path_to_model='models/A1-240717/SAC_5000.zip')
+>>>>>>> b6e4cbb (THE LOSS FUNCTION)

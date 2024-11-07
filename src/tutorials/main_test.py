@@ -3,7 +3,11 @@ import os.path
 import sys
 import json
 
+<<<<<<< HEAD
 import scripts
+=======
+# import scripts
+>>>>>>> b6e4cbb (THE LOSS FUNCTION)
 
 log_path = "log"
 data_path = "data"
