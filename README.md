@@ -41,9 +41,9 @@ python src/tests/main_<robot>.py train -n <model_name> -s
 
 For training, the full list of arguments is:
 ```
---model-name (-n): name of the model (required)
---n-envs (-e): number of environments to train with (default is 16)
---use-sym-policy (-s): whether to use the symmetric policy (default is false)
+--model_name (-n): name of the model (required)
+--n_envs (-e): number of environments to train with (default is 16)
+--use_sym_policy (-s): whether to use the symmetric policy (default is false)
 ```
 
 ### Testing
@@ -55,8 +55,8 @@ python src/tests/main_<robot>.py test --model-path models/<model_name>/<model_fi
 
 For testing, the full list of arguments is:
 ```
---model-path (-mp): path of model to test (required)
---n-envs (-e): number of environments to test with (default is 16)
+--model_path (-mp): path of model to test (required)
+--n_envs (-e): number of environments to test with (default is 16)
 ```
 
 *Note: `main_cheetah.py` is currently the only file that has been maintained. Adjustments may need to be made to main_go2 and main_a1 in order to use some of the above CLI arguments*

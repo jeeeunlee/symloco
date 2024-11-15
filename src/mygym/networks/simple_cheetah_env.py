@@ -5,9 +5,9 @@ import torch as th
 from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
-from src.mygym.networks.target_velcity_generator import (
-    SinusoidalVelcocityGenerator,
-    BiasedSinusoidalVelcocityGenerator,
+from mygym.networks.target_velocity_generator import (
+    SinusoidalVelocityGenerator,
+    BiasedSinusoidalVelocityGenerator,
 )
 
 
@@ -69,11 +69,11 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         self._action_dim = 2
         # target velocity generator
         if velocity_profile == "oneway":
-            self.tv_gen = BiasedSinusoidalVelcocityGenerator(self._action_dim)
+            self.tv_gen = BiasedSinusoidalVelocityGenerator(self._action_dim)
         elif velocity_profile == "bothway":
-            self.tv_gen = SinusoidalVelcocityGenerator(self._action_dim)
+            self.tv_gen = SinusoidalVelocityGenerator(self._action_dim)
         else:
-            self.tv_gen = BiasedSinusoidalVelcocityGenerator(self._action_dim)
+            self.tv_gen = BiasedSinusoidalVelocityGenerator(self._action_dim)
 
         self.target_velocity = self.tv_gen.get_target_velocity(self._time)
 
