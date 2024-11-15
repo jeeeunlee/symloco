@@ -5,7 +5,7 @@ import torch as th
 from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
-from mygym.networks.target_velocity_generator import (
+from mygym.utils.target_velocity_generator import (
     SinusoidalVelocityGenerator,
     BiasedSinusoidalVelocityGenerator,
 )
