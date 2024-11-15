@@ -5,6 +5,10 @@ import torch as th
 from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
+from src.mygym.networks.target_velcity_generator import (
+    SinusoidalVelcocityGenerator,
+    BiasedSinusoidalVelcocityGenerator,
+)
 
 
 XML_FILE_PATH = os.path.join(os.path.dirname(__file__), "half_cheetah_sym.xml")
@@ -15,17 +19,10 @@ DEFAULT_CAMERA_CONFIG = {
     "lookat": np.array((0.0, 0.0, 0.12250000000000005)),
 }
 
-DEFAULT_VELOCITY_PROFILE = {
-    "freq": (0.1, 0.1),  # 0.2Hz
-    "mag": (2, -0.3),  # 2m/s
-}
-
 TOUCH_SENSOR_NOISE = 0.01
 
 
 # symmetric inverted double pendulm
-
-
 class SymCheetahEnv(MujocoEnv, utils.EzPickle):
     """
     ## Action Space
@@ -47,7 +44,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
-        velocity_profile=None,
+        velocity_profile="oneway",
         weight_run=-1.0,
         weight_ctrl=-0.1,
         weight_gait=-0.05,
@@ -63,19 +60,22 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
             reset_noise_scale,
             **kwargs,
         )
-
-        self._velocity_profile = (
-            velocity_profile
-            if velocity_profile is not None
-            else DEFAULT_VELOCITY_PROFILE
-        )
         self._weight_run = weight_run
         self._weight_ctrl = weight_ctrl
         self._weight_gait = weight_gait
         self._reset_noise_scale = reset_noise_scale
 
         self._time = 0
-        self.target_velocity = self.get_target_velocity(self._time)
+        self._action_dim = 2
+        # target velocity generator
+        if velocity_profile == "oneway":
+            self.tv_gen = BiasedSinusoidalVelcocityGenerator(self._action_dim)
+        elif velocity_profile == "bothway":
+            self.tv_gen = SinusoidalVelcocityGenerator(self._action_dim)
+        else:
+            self.tv_gen = BiasedSinusoidalVelcocityGenerator(self._action_dim)
+
+        self.target_velocity = self.tv_gen.get_target_velocity(self._time)
 
         observation_space = Box(low=-np.inf, high=np.inf, shape=(22,), dtype=np.float64)
 
@@ -89,16 +89,6 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         )
 
         self.init_sym_structure_param()
-
-    def get_target_velocity(self, t=0.0):  # -> tuple[float, float]
-        assert (
-            self._velocity_profile is not None and len(self._velocity_profile) > 0
-        ), "Invalid velocity trajectory"
-        mag = self._velocity_profile["mag"]
-        freq = self._velocity_profile["freq"]
-        x_d = mag[0] * np.sin(2.0 * np.pi * freq[0] * t)
-        ry_d = mag[1] * np.sin(2.0 * np.pi * freq[1] * t)
-        return np.array([x_d, ry_d])
 
     def reward_ctrl(self, action):
         return self._weight_ctrl * np.sum(np.square(action))
@@ -117,7 +107,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         xz_position_after = self.data.qpos[[0, 2]]
         xz_velocity = (xz_position_after - xz_position_before) / self.dt
         sensordata = self.data.sensordata.flat.copy()
-        self.target_velocity = self.get_target_velocity(self._time)
+        self.target_velocity = self.tv_gen.get_target_velocity(self._time)
 
         # Note: all reward weights are currently negative
         reward_ctrl = self.reward_ctrl(action)
@@ -177,12 +167,13 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         )
         self.restructured_action_dim = 3  # 3x2(left, right)
 
-    def restruct_features_fn(self, feature):
-        # feature shape [n,20]
+    def restruct_features_fn(
+        self,
+        feature: th.Tensor,  # Shape [n,18]
+    ) -> th.Tensor:  # Shape [n,18]
         rootx = feature[:, [0, 9]]  # Shape [n, 2]
         rootz = feature[:, [1, 10]]  # Shape [n, 2]
         rooty = feature[:, [2, 11]]  # Shape [n, 2]
-
         bfoot_pos = feature[:, 3:6]  # Shape [n, 3]
         ffoot_pos = feature[:, 6:9]  # Shape [n, 3]
         bfoot_vel = feature[:, 12:15]  # Shape [n, 3]
@@ -196,7 +187,6 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         feature_left = th.cat(
             [rootx, rootz, rooty, bfoot_pos, bfoot_vel, btouch, target_vel], dim=1
         )
-
         feature_right = th.cat(
             [-rootx, rootz, -rooty, -ffoot_pos, -ffoot_vel, ftouch, -target_vel], dim=1
         )

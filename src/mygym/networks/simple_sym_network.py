@@ -28,21 +28,11 @@ def make_mlp_model(input_dim: int, latent_size: int, num_layer: int, nameadd: st
     for i in range(num_layer):
         layers_dict["dense" + str(i) + nameadd] = nn.Linear(input_dim, latent_size)
         layers_dict["act" + str(i) + nameadd] = nn.ReLU()
-        input_dim = latent_size
-
-    #   layers_dict['layernorm'] = nn.LayerNorm(latent_size)
-
+        # input_dim = latent_size
     return nn.Sequential(layers_dict)
 
-
-#   return nn.Sequential([
-#       nn.nets.MLP([latent_size] * num_layer, activate_final=True, name='mlp'+nameadd), #, dropout_rate=0.2
-#       nn.LayerNorm(axis=-1, create_offset=True, create_scale=True, name='layer_norm'+nameadd)  ])
-
-
-class Aggregator:
+class Aggregator():
     """agg"""
-
     def __init__(self, aggregator=th.sum):
         self._aggregator = aggregator
 
