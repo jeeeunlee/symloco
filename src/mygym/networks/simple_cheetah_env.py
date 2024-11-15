@@ -48,18 +48,18 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
     def __init__(
         self,
         velocity_profile=None,
-        forward_reward_weight=1.0,
-        ctrl_cost_weight=0.1,
-        foot_phase_weight=0.05,
+        weight_run=-1.0,
+        weight_ctrl=-0.1,
+        weight_gait=-0.05,
         reset_noise_scale=0.1,
         **kwargs,
     ):
         utils.EzPickle.__init__(
             self,
             velocity_profile,
-            forward_reward_weight,
-            ctrl_cost_weight,
-            foot_phase_weight,
+            weight_run,
+            weight_ctrl,
+            weight_gait,
             reset_noise_scale,
             **kwargs,
         )
@@ -69,9 +69,9 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
             if velocity_profile is not None
             else DEFAULT_VELOCITY_PROFILE
         )
-        self._forward_reward_weight = forward_reward_weight
-        self._ctrl_cost_weight = ctrl_cost_weight
-        self._foot_phase_weight = foot_phase_weight
+        self._weight_run = weight_run
+        self._weight_ctrl = weight_ctrl
+        self._weight_gait = weight_gait
         self._reset_noise_scale = reset_noise_scale
 
         self._time = 0
@@ -100,17 +100,14 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         ry_d = mag[1] * np.sin(2.0 * np.pi * freq[1] * t)
         return np.array([x_d, ry_d])
 
-    def control_cost(self, action):
-        control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
-        return control_cost
+    def reward_ctrl(self, action):
+        return self._weight_ctrl * np.sum(np.square(action))
 
-    def movement_cost(self, xz_velocity):
-        return self._forward_reward_weight * np.linalg.norm(
-            self.target_velocity - xz_velocity
-        )
+    def reward_run(self, xz_velocity):
+        return self._weight_run * np.linalg.norm(self.target_velocity - xz_velocity)
 
-    def foot_phase_cost(self, ftouch, btouch):
-        return self._foot_phase_weight * int(
+    def reward_gait(self, ftouch, btouch):
+        return self._weight_gait * int(
             (ftouch <= TOUCH_SENSOR_NOISE) != (btouch <= TOUCH_SENSOR_NOISE)
         )
 
@@ -122,12 +119,13 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         sensordata = self.data.sensordata.flat.copy()
         self.target_velocity = self.get_target_velocity(self._time)
 
-        ctrl_cost = self.control_cost(action)
-        movement_cost = self.movement_cost(xz_velocity)
-        foot_phase_cost = self.foot_phase_cost(sensordata[0], sensordata[1])
+        # Note: all reward weights are currently negative
+        reward_ctrl = self.reward_ctrl(action)
+        reward_run = self.reward_run(xz_velocity)
+        reward_gait = self.foot_phase_cost(sensordata[0], sensordata[1])
 
         observation = self._get_obs()
-        reward = -movement_cost - ctrl_cost - foot_phase_cost
+        reward = reward_run + reward_ctrl + reward_gait
 
         self._time += self.dt
 
@@ -135,9 +133,10 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         info = {
             "xz_position": xz_position_after,
             "xz_velocity": xz_velocity,
-            "reward_run": -movement_cost,
-            "reward_ctrl": -ctrl_cost,
-            "target_velocity": self.target_velocity,
+            "reward_run": reward_run,
+            "reward_ctrl": reward_ctrl,
+            "reward_gait": reward_gait,
+            "command": self.target_velocity,
         }
 
         if self.render_mode == "human":

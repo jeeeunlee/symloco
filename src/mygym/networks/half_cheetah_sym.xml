@@ -72,7 +72,7 @@
           <body name="bfoot" pos="-.28 0 -.14">
             <joint axis="0 1 0" damping="3" name="bfoot" pos="0 0 0" range="-.4 .785" stiffness="120" type="hinge"/>
             <geom axisangle="0 1 0 -.27" name="bfoot" pos=".03 0 -.097" rgba="0.9 0.6 0.6 1" size="0.046 .094" type="capsule"/>
-            <site name="bfoot" pos="0 0 0" />
+            <site name="bfoot" axisangle="0 1 0 -.27" pos=".06 0 -.194" size="0.046" rgba="1 0 0 1" />
           </body>
         </body>
       </body>
@@ -95,7 +95,7 @@
           <body name="ffoot" pos=".28 0 -.14">
             <joint axis="0 1 0" damping="3" name="ffoot" pos="0 0 0" range="-.4 .785" stiffness="120" type="hinge"/>
             <geom axisangle="0 1 0 .27" name="ffoot" pos="-.03 0 -.097" rgba="0.9 0.6 0.6 1" size="0.046 .094" type="capsule"/>
-            <site name="ffoot" pos="0 0 0" />
+            <site name="ffoot" axisangle="0 1 0 .27" pos="-.06 0 -.194" size="0.046" rgba="0 0 1 1" />
           </body>
         </body>
       </body>

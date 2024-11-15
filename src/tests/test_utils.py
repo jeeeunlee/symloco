@@ -8,6 +8,7 @@ from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3 import SAC, TD3, A2C, PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.logger import configure
+from stable_baselines3.common.callbacks import BaseCallback
 
 
 def get_args(prog_name: str) -> dict[str, Any]:
@@ -57,6 +58,7 @@ def train(
     max_iters: int | None = None,
     model_dir: str = "models",
     log_dir: str = "logs",
+    reward_logger_callback: BaseCallback | None = None,
 ) -> None:
     os.makedirs(model_dir, exist_ok=True)
     if os.path.exists(f"{model_dir}/{model_name}"):
@@ -66,13 +68,23 @@ def train(
         shutil.rmtree(log_subdir)
     os.makedirs(log_subdir)
 
+    callback = (
+        reward_logger_callback(log_dir=log_subdir) if reward_logger_callback else None
+    )
     logger = configure(log_subdir, ["stdout", "csv", "tensorboard"])
     model.set_logger(logger)
 
     iters = 0
     while max_iters is None or iters < max_iters:
         iters += 1
-        model.learn(total_timesteps=n_timesteps, reset_num_timesteps=False)
+        if callback:
+            model.learn(
+                total_timesteps=n_timesteps,
+                reset_num_timesteps=False,
+                callback=callback,
+            )
+        else:
+            model.learn(total_timesteps=n_timesteps, reset_num_timesteps=False)
         model.save(f"{model_dir}/{model_name}/{sb3_algo}_{n_timesteps * iters}")
 
 

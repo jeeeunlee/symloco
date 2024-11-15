@@ -9,6 +9,8 @@ sys.path.append(os.getcwd())
 from stable_baselines3.common.vec_env import VecEnv  # noqa: E402
 from stable_baselines3.common.env_util import make_vec_env  # noqa: E402
 from stable_baselines3 import PPO  # noqa: E402
+from stable_baselines3.common.callbacks import BaseCallback  # noqa: E402
+from torch.utils.tensorboard import SummaryWriter  # noqa: E402
 from src.mygym.networks.simple_sym_network import (  # noqa: E402
     CustomActorCriticPolicy as SymActorCriticPolicy,
 )
@@ -26,6 +28,27 @@ from src.tests.test_utils import (  # noqa: E402
 SB3_ALGO = "PPO"
 
 
+class RewardLoggerCallback(BaseCallback):
+    def __init__(self, log_dir: str):
+        super().__init__()
+        self.writer = SummaryWriter(log_dir)
+
+    def _on_step(self) -> bool:
+        info = self.locals["infos"][-1]
+
+        self.writer.add_scalar("reward/run", info["reward_run"], self.num_timesteps)
+        self.writer.add_scalar("reward/ctrl", info["reward_ctrl"], self.num_timesteps)
+        self.writer.add_scalar("reward/gait", info["reward_gait"], self.num_timesteps)
+        self.writer.add_scalar(
+            "train/command_x", info["command"][0], self.num_timesteps
+        )
+        self.writer.add_scalar(
+            "train/command_ry", info["command"][1], self.num_timesteps
+        )
+
+        return True
+
+
 def _make_env(n_envs: int) -> VecEnv:
     return make_vec_env("simple_cheetah", n_envs=n_envs)
 
@@ -41,14 +64,16 @@ def train(model_name: str, use_sym_policy: bool, n_envs: int):
             policy_kwargs={"env": env.envs[0]},
         )
         if use_sym_policy
-        else PPO(
-            NonSymActorCriticPolicy,
-            env,
-            verbose=1,
-            device="cuda",
-        )
+        else PPO(NonSymActorCriticPolicy, env, verbose=1, device="cuda")
     )
-    _train(model, SB3_ALGO, model_name=model_name, n_timesteps=50000, max_iters=200)
+    _train(
+        model,
+        SB3_ALGO,
+        model_name=model_name,
+        n_timesteps=50000,
+        max_iters=200,
+        reward_logger_callback=RewardLoggerCallback,
+    )
 
 
 def test(model_path: io.BytesIO, n_envs: int):
