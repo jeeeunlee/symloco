@@ -122,7 +122,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         # Note: all reward weights are currently negative
         reward_ctrl = self.reward_ctrl(action)
         reward_run = self.reward_run(xz_velocity)
-        reward_gait = self.foot_phase_cost(sensordata[0], sensordata[1])
+        reward_gait = self.reward_gait(sensordata[0], sensordata[1])
 
         observation = self._get_obs()
         reward = reward_run + reward_ctrl + reward_gait
