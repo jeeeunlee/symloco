@@ -27,3 +27,36 @@ pip install gymnasium[mujoco]
 conda install -y -c conda-forge tensorboard
 conda install -y -c conda-forge scipy
 ```
+
+## Training and Testing
+
+The scripts for training/testing can be found in `src/tests`.
+
+### Training
+
+Start a training run using the following command:
+```bash
+python src/tests/main_<robot>.py train -n <model_name> -s
+```
+
+For training, the full list of arguments is:
+```
+--model-name (-n): name of the model (required)
+--n-envs (-e): number of environments to train with (default is 16)
+--use-sym-policy (-s): whether to use the symmetric policy (default is false)
+```
+
+### Testing
+
+Test a model using the following command:
+```bash
+python src/tests/main_<robot>.py test --model-path models/<model_name>/<model_file>.zip
+```
+
+For testing, the full list of arguments is:
+```
+--model-path (-mp): path of model to test (required)
+--n-envs (-e): number of environments to test with (default is 16)
+```
+
+*Note: `main_cheetah.py` is currently the only file that has been maintained. Adjustments may need to be made to main_go2 and main_a1 in order to use some of the above CLI arguments*
