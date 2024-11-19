@@ -41,7 +41,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
-        velocity_profile="oneway",
+        velocity_profile="bothway",
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.1,
         reset_noise_scale=0.1,
@@ -148,7 +148,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         return observation
 
     def init_sym_structure_param(self):
-        self.restructured_feature_dim = 13  # 6 for body + 6 for leg + 1 for target vel
+        self.restructured_feature_dim = 14  # 6 for body + 6 for leg + 1 for target vel
         self.restructured_action_dim = 3  # 3x2(left, right)
 
     def restruct_features_fn(self, 
@@ -161,7 +161,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         ffoot_pos = feature[:, 6:9]  # Shape [n, 3]
         bfoot_vel = feature[:, 12:15]  # Shape [n, 3]
         ffoot_vel = feature[:, 15:18]  # Shape [n, 3]
-        target_vel = feature[:, 18][:, np.newaxis]  # Shape [n, 2]
+        target_vel = feature[:, 18:20]  # Shape [n, 2]
 
         feature_left = th.cat(
             [rootx, rootz, rooty, 
@@ -176,6 +176,6 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
 
     def destruct_actions_fn(self, structured_actions):  # shape [n,2,3]
         actions = th.cat(
-            (structured_actions[:, 0, :], structured_actions[:, 1, :]), dim=1
+            (structured_actions[:, 0, :], -structured_actions[:, 1, :]), dim=1
         )
         return actions  # shape [n,6]
