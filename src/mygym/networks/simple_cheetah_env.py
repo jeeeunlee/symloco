@@ -44,7 +44,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
-        velocity_profile="oneway",
+        velocity_profile="bothway",
         weight_run=-1.0,
         weight_ctrl=-0.1,
         weight_gait=-0.05,
@@ -182,7 +182,7 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         ftouch = feature[:, 18:19]  # Shape [n, 1]
         btouch = feature[:, 19:20]  # Shape [n, 1]
 
-        target_vel = feature[:, 20:21]  # Shape [n, 1]
+        target_vel = feature[:, 21:23]  # Shape [n, 2]
 
         feature_left = th.cat(
             [rootx, rootz, rooty, bfoot_pos, bfoot_vel, btouch, target_vel], dim=1
@@ -195,6 +195,6 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
 
     def destruct_actions_fn(self, structured_actions):  # shape [n,2,3]
         actions = th.cat(
-            (structured_actions[:, 0, :], structured_actions[:, 1, :]), dim=1
+            (structured_actions[:, 0, :], -structured_actions[:, 1, :]), dim=1
         )
         return actions  # shape [n,6]

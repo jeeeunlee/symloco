@@ -8,13 +8,13 @@
 # python3 src/tests/main_cheetah.py "train" \
 # -n="simple_cheetah_custom" 
 
-python3 src/tests/main_cheetah.py "train" \
--n="simple_cheetah_symmetry_oneway_noangle" --use_sym_policy
+# python3 src/tests/main_cheetah.py "train" \
+# -n="simple_cheetah_symmetry_oneway_noangle" --use_sym_policy
 
 ## test
 # python3 src/tests/main_cheetah.py "test" \
 # -n="simple_cheetah_symmetry_oneway" --use_sym_policy \
-# -mp="models/simple_cheetah_symmetry_oneway/PPO_7700000.zip"
+# -mp="models/simple_cheetah_symmetry_oneway_noangle/PPO_8050000.zip"
 
-# "test" -n="simple_cheetah_symmetry_oneway" --use_sym_policy -mp="models/simple_cheetah_symmetry_oneway/PPO_7700000.zip"
+# "test" -n="simple_cheetah_symmetry_oneway" --use_sym_policy -mp="models/simple_cheetah_symmetry_oneway_noangle/PPO_8050000.zip"
 
