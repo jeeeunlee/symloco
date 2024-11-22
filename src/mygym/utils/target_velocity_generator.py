@@ -3,7 +3,7 @@ import numpy as np
 
 DEFAULT_VELOCITY_PROFILE = {
     "freq": [0.1, 0.1],  # 0.2Hz
-    "mag": [2, 0],  # 2m/s
+    "mag": [-2, 0],  # 2m/s
 }
 
 
