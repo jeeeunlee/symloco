@@ -18,6 +18,9 @@ def get_args(prog_name: str) -> dict[str, Any]:
     parser.add_argument("-s", "--use_sym_policy", action="store_true")
     parser.add_argument("-mp", "--model_path", type=argparse.FileType("rb"))
     parser.add_argument("-e", "--n_envs", default=16, type=int)
+    parser.add_argument(
+        "-v", "--velocity_profile", choices=["oneway", "bothway"], default="oneway"
+    )
     return parser.parse_args()
 
 

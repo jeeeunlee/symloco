@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+from typing import Literal
 
 dirname = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
 sys.path.append(dirname)
@@ -26,6 +27,7 @@ from src.tests.test_utils import (  # noqa: E402
 
 
 SB3_ALGO = "PPO"
+VelocityProfile = Literal["oneway"] | Literal["bothway"]
 
 
 class RewardLoggerCallback(BaseCallback):
@@ -49,12 +51,21 @@ class RewardLoggerCallback(BaseCallback):
         return True
 
 
-def _make_env(n_envs: int) -> VecEnv:
-    return make_vec_env("simple_cheetah", n_envs=n_envs)
+def _make_env(n_envs: int, velocity_profile: VelocityProfile) -> VecEnv:
+    return make_vec_env(
+        "simple_cheetah",
+        n_envs=n_envs,
+        env_kwargs={"velocity_profile": velocity_profile},
+    )
 
 
-def train(model_name: str, use_sym_policy: bool, n_envs: int):
-    env = _make_env(n_envs)
+def train(
+    model_name: str,
+    use_sym_policy: bool,
+    n_envs: int,
+    velocity_profile: VelocityProfile,
+):
+    env = _make_env(n_envs, velocity_profile)
     model = (
         PPO(
             SymActorCriticPolicy,
@@ -76,8 +87,8 @@ def train(model_name: str, use_sym_policy: bool, n_envs: int):
     )
 
 
-def test(model_path: io.BytesIO, n_envs: int):
-    env = _make_env(n_envs)
+def test(model_path: io.BytesIO, n_envs: int, velocity_profile: VelocityProfile):
+    env = _make_env(n_envs, velocity_profile)
     model = load_model(env, model_path, SB3_ALGO)
     _test(model, env, fps=env.metadata["render_fps"])
 
@@ -86,7 +97,7 @@ if __name__ == "__main__":
     args = get_args("main_cheetah")
     if args.mode == "train":
         assert args.model_name, "Must provide model name"
-        train(args.model_name, args.use_sym_policy, args.n_envs)
+        train(args.model_name, args.use_sym_policy, args.n_envs, args.velocity_profile)
     else:
         assert args.model_path, "Model file required for testing"
-        test(args.model_path, args.n_envs)
+        test(args.model_path, args.n_envs, args.velocity_profile)
