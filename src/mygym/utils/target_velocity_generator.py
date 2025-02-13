@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 import numpy as np
+from typing import Literal
+
+VelocityProfile = Literal["oneway", "bothway"]
 
 DEFAULT_VELOCITY_PROFILE = {
     "freq": [0.1, 0.1],  # 0.2Hz
@@ -27,9 +30,9 @@ class SinusoidalVelocityGenerator(TargetVelocityGenerator):
         mag=DEFAULT_VELOCITY_PROFILE["mag"],
     ):
         super().__init__(dim)
-        assert (
-            len(freq) == dim and len(mag) == dim
-        ), "Frequency and magnitude lists must match the dimension."
+        assert len(freq) == dim and len(mag) == dim, (
+            "Frequency and magnitude lists must match the dimension."
+        )
         self.freq = freq
         self.mag = mag
 
@@ -52,9 +55,9 @@ class BiasedSinusoidalVelocityGenerator(TargetVelocityGenerator):
         bias=DEFAULT_VELOCITY_PROFILE["mag"],
     ):
         super().__init__(dim)
-        assert (
-            len(freq) == dim and len(mag) == dim
-        ), "Frequency and magnitude lists must match the dimension."
+        assert len(freq) == dim and len(mag) == dim, (
+            "Frequency and magnitude lists must match the dimension."
+        )
         self.freq = freq
         self.mag = mag
         self.bias = bias
@@ -68,3 +71,13 @@ class BiasedSinusoidalVelocityGenerator(TargetVelocityGenerator):
             ]
         )
         return self.velocity
+
+
+def get_velocity_generator(profile: VelocityProfile) -> TargetVelocityGenerator:
+    match profile:
+        case "oneway":
+            return BiasedSinusoidalVelocityGenerator
+        case "bothway":
+            return SinusoidalVelocityGenerator
+        case _:
+            raise ValueError(f"Invalid velocity profile '{profile}'")

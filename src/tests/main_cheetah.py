@@ -1,7 +1,6 @@
 import os
 import sys
 import io
-from typing import Literal
 
 dirname = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
 sys.path.append(dirname)
@@ -24,10 +23,19 @@ from src.tests.test_utils import (  # noqa: E402
     load_model,
     get_args,
 )
+from mygym.utils.target_velocity_generator import (  # noqa: E402
+    VelocityProfile,
+)
 
 
 SB3_ALGO = "PPO"
-VelocityProfile = Literal["oneway"] | Literal["bothway"]
+LOGGING_KEYS = [
+    ("reward/run", "reward_run"),
+    ("reward/ctrl", "reward_ctrl"),
+    ("reward/gait", "reward_gait"),
+    ("train/command_x", "command_x"),
+    ("train/command_ry", "command_ry"),
+]
 
 
 class RewardLoggerCallback(BaseCallback):
@@ -83,7 +91,7 @@ def train(
         model_name=model_name,
         n_timesteps=50000,
         max_iters=200,
-        reward_logger_callback=RewardLoggerCallback,
+        logging_keys=LOGGING_KEYS,
     )
 
 

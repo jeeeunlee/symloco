@@ -6,8 +6,8 @@ from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
 from mygym.utils.target_velocity_generator import (
-    SinusoidalVelocityGenerator,
-    BiasedSinusoidalVelocityGenerator,
+    get_velocity_generator,
+    TargetVelocityGenerator,
 )
 
 
@@ -71,13 +71,9 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
         self._time = 0
         self._action_dim = 2
         # target velocity generator
-        if velocity_profile == "oneway":
-            self.tv_gen = BiasedSinusoidalVelocityGenerator(self._action_dim)
-        elif velocity_profile == "bothway":
-            self.tv_gen = SinusoidalVelocityGenerator(self._action_dim)
-        else:
-            self.tv_gen = BiasedSinusoidalVelocityGenerator(self._action_dim)
-
+        self.tv_gen: TargetVelocityGenerator = get_velocity_generator(velocity_profile)(
+            self._action_dim
+        )
         self.target_velocity = self.tv_gen.get_target_velocity(self._time)
 
         observation_space = Box(low=-np.inf, high=np.inf, shape=(24,), dtype=np.float64)
@@ -138,7 +134,8 @@ class SymCheetahEnv(MujocoEnv, utils.EzPickle):
             "reward_run": reward_run,
             "reward_ctrl": reward_ctrl,
             "reward_gait": reward_gait,
-            "command": self.target_velocity,
+            "command_x": self.target_velocity[0],
+            "command_ry": self.target_velocity[1],
         }
 
         if self.render_mode == "human":
