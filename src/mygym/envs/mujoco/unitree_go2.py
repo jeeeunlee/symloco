@@ -11,22 +11,22 @@ from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
 
-UNITREE_GO2_PATH = os.path.join(
-    os.path.dirname(__file__), "mygym/envs/mujoco/unitree_go2/scene.xml"
-)
+UNITREE_GO2_PATH = os.path.join(os.path.dirname(__file__), "unitree_go2/scene.xml")
 DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
-init_z = 0.005
+init_z = 0.05
 
 # fmt: off
-init_qpos = [0, 0, 0.275 + init_z, 
+init_pos = [0, 0, 0.275 + init_z, 
             1,0,0,0, 
              -0.2, 0.8, -1.6,
             0.2, 0.8, -1.6,
             -0.2, 0.8, -1.6, 
             0.2, 0.8, -1.6]
 # fmt: on
+
+VELOCITY_PROFILE = {"freq": [0.1, 0.0, 0.1], "mag": [2, 0, 0]}
 
 
 class Go2Env(MujocoEnv, utils.EzPickle):
@@ -117,60 +117,57 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         self,
         xml_file=UNITREE_GO2_PATH,
         velocity_profile: VelocityProfile = "oneway",
-        weight_balance=-10.0,
-        weight_run=-2.0,
-        weight_ctrl=-0.1,
-        weight_safety=-0.1,
-        weight_smooth=-0.1,
+        weight_lin_vel=1.0,
+        weight_rot_vel=0.2,
+        weight_z=-50.0,
+        weight_pose=-0.1,
+        weight_action_rate=-0.005,
+        weight_vel_z=-1.0,
+        weight_stability=-0.1,
         reset_noise_scale=0.05,
-        init_qpos=init_qpos,
+        init_pos=init_pos,
         **kwargs,
     ):
         utils.EzPickle.__init__(
             self,
             xml_file,
             velocity_profile,
-            weight_balance,
-            weight_run,
-            weight_ctrl,
-            weight_safety,
-            weight_smooth,
+            weight_lin_vel,
+            weight_z,
+            weight_pose,
+            weight_action_rate,
+            weight_vel_z,
+            weight_stability,
             reset_noise_scale,
-            init_qpos,
+            init_pos,
             **kwargs,
         )
         # reward weights
-        self._weight_balance = weight_balance
-        self._weight_run = weight_run
-        self._weight_ctrl = weight_ctrl
-        self._weight_safety = weight_safety
-        self._weight_smooth = weight_smooth
+        self._weight_lin_vel = weight_lin_vel
+        self._weight_rot_vel = weight_rot_vel
+        self._weight_z = weight_z
+        self._weight_pose = weight_pose
+        self._weight_action_rate = weight_action_rate
+        self._weight_vel_z = weight_vel_z
+        self._weight_stability = weight_stability
         # noise
         self._reset_noise_scale = reset_noise_scale
 
-        self._time = 0
-        self._action_dim = 3
+        # termination conditions
+        self._max_roll = np.deg2rad(10)
+        self._max_pitch = np.deg2rad(10)
+        self._min_z = 0.0
 
-        # target velocity generator
-        self.tv_gen: TargetVelocityGenerator = get_velocity_generator(velocity_profile)(
-            self._action_dim
-        )
-        self.target_velocity = self.tv_gen.get_target_velocity(self._time)
+        # target velocity generator (returns command as [v_x, v_y, w_z])
+        self.COMMAND_DIM = 3
+        self._tv_gen: TargetVelocityGenerator = get_velocity_generator(
+            velocity_profile
+        )(self.COMMAND_DIM, freq=VELOCITY_PROFILE["freq"], mag=VELOCITY_PROFILE["mag"])
 
         # additional observation
-        # self.dim_action = 12
-        # self.prev_joint_velocity = np.zeros(12)
-        # self.prev_joint_acceleration = np.zeros(12)
-        self.dim_action = 6
-        self.dim_obs = 52 + 24  # 76
-        # init prev cmd
-        # self.prev_joint_cmd = np.zeros(12)
-        self.init_qpos = init_qpos
-        self.init_qpos_inverted = init_qpos.copy()
-        self._revert_sign_abduction(self.init_qpos_inverted)
-
+        self.DIM_OBS = 48
         observation_space = Box(
-            low=-np.inf, high=np.inf, shape=(self.dim_obs,), dtype=np.float64
+            low=-np.inf, high=np.inf, shape=(self.DIM_OBS,), dtype=np.float64
         )
 
         MujocoEnv.__init__(
@@ -182,9 +179,101 @@ class Go2Env(MujocoEnv, utils.EzPickle):
             **kwargs,
         )
 
-        # self.action_space = Box(
-        #     low=-3.0, high=3.0, shape=(self.dim_action,), dtype=np.float64
-        # )
+        # init data
+        self._pos_init = init_pos
+        self.qvel_init = np.zeros(self.model.nv)
+        self._revert_sign_abduction(self.qpos_init)
+        self._revert_sign_abduction(self.qvel_init)
+
+        self.reset_model()
+
+    @property
+    def target_velocity(self) -> np.ndarray:
+        return self._tv_gen.get_target_velocity(self._time)
+
+    @property
+    def qpos_init(self) -> np.ndarray:
+        return init_pos[7:]
+
+    @property
+    def z_init(self) -> float:
+        return init_pos[2]
+
+    ###############
+    # Sensor data #
+    ###############
+
+    @property
+    def sensordata(self) -> np.ndarray:
+        # Only copy sensordata when new step has been observed
+        if self._new_step:
+            self._new_step = False
+            self._sensordata = self.data.sensordata.flat.copy()
+        assert self._sensordata is not None, "No valid sensordata to read"
+        return self._sensordata
+
+    @property
+    def qpos(self) -> np.ndarray:
+        return self.sensordata[:12]
+
+    @property
+    def qvel(self) -> np.ndarray:
+        return self.sensordata[12:24]
+
+    @property
+    def qtorque(self) -> np.ndarray:
+        return self.sensordata[24:36]
+
+    @property
+    def ori_rpy(self) -> np.ndarray:
+        return R.from_quat(self.sensordata[36:40], scalar_first=True).as_euler("yxz")
+
+    @property
+    def rot_vel(self) -> np.ndarray:
+        return self.sensordata[40:43]
+
+    @property
+    def lin_acc(self) -> np.ndarray:
+        return self.sensordata[43:46]
+
+    @property
+    def pos(self) -> np.ndarray:
+        return self.sensordata[46:49]
+
+    @property
+    def lin_vel(self) -> np.ndarray:
+        return self.sensordata[49:52]
+
+    ####################
+    # Reward functions #
+    ####################
+
+    def _reward_lin_vel(self):
+        return self._weight_lin_vel * np.exp(
+            -(np.linalg.norm(self.target_velocity[:2] - self.lin_vel[:2]) ** 2)
+        )
+
+    def _reward_rot_vel(self):
+        return self._weight_rot_vel * np.exp(
+            -(np.linalg.norm(self.target_velocity[2] - self.rot_vel[2]) ** 2)
+        )
+
+    def _reward_z(self):
+        return self._weight_z * (self.pos[-1] - self.z_init) ** 2
+
+    def _reward_pose(self):
+        return self._weight_pose * np.linalg.norm(self.qpos - self.qpos_init) ** 2
+
+    def _reward_action_rate(self, action):
+        return (
+            self._weight_action_rate * np.linalg.norm(action - self._last_action) ** 2
+        )
+
+    def _reward_vel_z(self):
+        return self._weight_vel_z * self.lin_vel[2] ** 2
+
+    def _reward_stability(self):
+        return self._weight_stability * np.linalg.norm(self.ori_rpy[:2]) ** 2
 
     def _revert_sign_abduction(self, q_value) -> None:
         # don't know why but sign reverted for abduction joint
@@ -192,134 +281,122 @@ class Go2Env(MujocoEnv, utils.EzPickle):
         for abd_ind in [0, 3, 6, 9]:
             q_value[abd_ind + base_ind] *= -1
 
-    def reward_ctrl(self, action):
-        return np.exp(-self._weight_ctrl * np.linalg.norm(action))
-
-    def reward_run(self, xyz_velocity):
-        return np.exp(
-            self._weight_run * np.linalg.norm(self.target_velocity - xyz_velocity)
-        )
-
-    def reward_balance(self) -> tuple[float, float, float]:
-        qw = self.data.qpos[3]
-        qxyz = self.data.qpos[4:7]
-        r = R.from_quat([*qxyz, qw]).as_rotvec()
-        dr = np.linalg.norm(r)
-        dz = self.init_qpos[2] - self.data.qpos[2]
-        balance_reward = np.exp(self._weight_balance * np.linalg.norm([dr, 2.5 * dz]))
-        return balance_reward, dr, dz
-
-    def reward_smooth(self):
-        penalty_acc = np.linalg.norm(self.joint_acceleration)
-        penalty_vel = np.linalg.norm(self.joint_velocity)
-        return np.exp(self._weight_smooth * (penalty_acc + 0.1 * penalty_vel))
-
-    def reward_safety(self):
-        joint_limits = self.model.jnt_range[1:]
-        qpos = self.data.sensordata[:12]
-        safety_reward = 0.0
-        for i, (jnt_min, jnt_max) in enumerate(joint_limits):
-            dist_to_limit = np.min([jnt_max - qpos[i], qpos[i] - jnt_min]) / (
-                jnt_max - jnt_min
-            )
-            if dist_to_limit < 0.1:
-                safety_reward -= (1 - 10 * dist_to_limit) ** 2
-        return np.exp(self._weight_safety * safety_reward)
-
-    def step(self, action):
-        # despos = self.prev_joint_cmd + actions * self.dt
-
-        xyz_pos_before = self.data.qpos[:3]
-        self.do_simulation(action, self.frame_skip)
-        xyz_pos_after = self.data.qpos[:3]
-        xyz_velocity = (xyz_pos_after - xyz_pos_before) / self.dt
-
-        # x_position_before = self.data.qpos[0]
-        # self.do_simulation(despos, self.frame_skip)
-        # x_position_after = self.data.qpos[0]
-        # x_velocity = (x_position_after - x_position_before) / self.dt
-        self._update_prev_obs(action)
-        self.target_velocity = self.tv_gen.get_target_velocity(self._time)
-
-        reward_ctrl = self.reward_ctrl(action)
-        reward_run = self.reward_run(xyz_velocity)
-        reward_balance, dr, dz = self.reward_balance()
-        reward_smooth = self.reward_smooth()
-        reward_safety = self.reward_safety()
-
-        observation = self._get_obs()
-        reward = (
-            reward_ctrl * reward_run * reward_balance * reward_smooth * reward_safety
-        )
-
-        self._time += self.dt
-
-        info = {
-            "pos": xyz_pos_after,
-            "vel": xyz_velocity,
-            "reward_ctrl": reward_ctrl,
-            "reward_run": reward_run,
-            "reward_balance": reward_balance,
-            "reward_smooth": reward_smooth,
-            "reward_safety": reward_safety,
-            "command_x": self.target_velocity[0],
-            "command_ry": self.target_velocity[1],
-            "command_z": self.target_velocity[2],
-        }
-
-        if self.render_mode == "human":
-            self.render()
-
-        # termination condition
-        terminated = dz > 0.25 or dr > 0.75
-        if dz > 0.25:
-            print(f"{dz=}")
-        if dr > 0.75:
-            print(f"{dr=}")
-
-        return observation, reward, terminated, False, info
-
-    def _update_prev_obs(self, action):
-        self.joint_acceleration = (action - self.joint_velocity) / self.dt
-        self.joint_velocity = action
-
     def _get_obs(self):
-        # qpos (12,); qvel (12,); qtrq (12,); imu (16,)
-        sensordata = self.data.sensordata.flat.copy()  # sensordata shape: (52,)
+        """
+        **Observation space:** `Box(-Inf, Inf, (48,), float64)`
+
+        | Index | Observation                    | Name (in XML)  | Unit             |
+        | ----- | ------------------------------ | -------------- | ---------------- |
+        | 0-2   | linear velocity in IMU         | frame_vel      | vel (m/s)        |
+        | 3-5   | rotational velocity in IMU     | imu_gyro       | vel (rad/s)      |
+        | 6-7   | roll and pitch of IMU          | imu_quat       | angle (rad)      |
+        | 8-19  | joint positions                | *jointpos      | quat             |
+        | 20-31 | joint velocities               | *jointvel      | vel (rad/s)      |
+        | 32-43 | position commands to joints    |       -        | angle (rad)      |
+        | 44-46 | velocity command v_x, v_y, w_z |       -        | vel (m/s, rad/s) |
+        | 47    | height (z) command             |       -        | pos (m)          |
+        """
         observation = np.concatenate(
             (
-                sensordata,
-                self.joint_velocity,
-                self.joint_acceleration,
+                self.lin_vel,
+                self.rot_vel,
+                self.ori_rpy[:2],
+                self.qpos,
+                self.qvel,
+                self._last_action,
                 self.target_velocity,
+                [self.z_init],
             )
         ).ravel()
         return observation
 
-    def reset_model(self):
-        qpos = self.init_qpos_inverted + self.np_random.uniform(
+    def _check_terminate(self):
+        """
+        Terminate if |roll| > max_roll, |pitch| > max_pitch, z < min_z
+        """
+        return (
+            abs(self.ori_rpy[0]) > self._max_roll
+            or abs(self.ori_rpy[1]) > self._max_pitch
+            or self.lin_vel[2] < self._min_z
+        )
+
+    def step(self, action_res):
+        action = self.qpos_init + action_res
+        self.do_simulation(action, self.frame_skip)
+        self._new_step = True
+        self._time += self.dt
+
+        # Calculate rewards
+        reward_lin_vel = self._reward_lin_vel()
+        reward_rot_vel = self._reward_rot_vel()
+        reward_z = self._reward_z()
+        reward_pose = self._reward_pose()
+        reward_action_rate = self._reward_action_rate(action_res)
+        reward_vel_z = self._reward_vel_z()
+        reward_stability = self._reward_stability()
+
+        observation = self._get_obs()
+        reward = (
+            reward_lin_vel
+            + reward_rot_vel
+            + reward_z
+            + reward_pose
+            + reward_action_rate
+            + reward_vel_z
+            + reward_stability
+        )
+
+        info = {
+            "pos_x": self.pos[0],
+            "pos_y": self.pos[1],
+            "pos_z": self.pos[2],
+            "vel_x": self.lin_vel[0],
+            "vel_y": self.lin_vel[1],
+            "vel_z": self.lin_vel[2],
+            "w_x": self.rot_vel[0],
+            "w_y": self.rot_vel[1],
+            "w_z": self.rot_vel[2],
+            "reward": reward,
+            "reward_lin_vel": reward_lin_vel,
+            "reward_rot_vel": reward_rot_vel,
+            "reward_z": reward_z,
+            "reward_pose": reward_pose,
+            "reward_action_rate": reward_action_rate,
+            "reward_vel_z": reward_vel_z,
+            "reward_stability": reward_stability,
+            "command_x": self.target_velocity[0],
+            "command_y": self.target_velocity[1],
+            "command_wz": self.target_velocity[2],
+        }
+
+        self._last_action = action_res
+
+        if self.render_mode == "human":
+            self.render()
+
+        return observation, reward, self._check_terminate(), False, info
+
+    def reset_model(self) -> np.ndarray:
+        """
+        Reset joint pos/vel and other utility variables
+        """
+        qpos = self._pos_init + self.np_random.uniform(
             low=-self._reset_noise_scale,
             high=self._reset_noise_scale,
             size=self.model.nq,
         )
         qvel = (
-            self.init_qvel
+            self.qvel_init
             + self._reset_noise_scale * self.np_random.standard_normal(self.model.nv)
         )
-
         self.set_state(qpos, qvel)
 
-        self.init_joint_velocity = qvel[6:].flat.copy()
-        self.init_joint_cmd = qpos[7:].flat.copy()
-        self._revert_sign_abduction(self.init_joint_velocity)
-        self._revert_sign_abduction(self.init_joint_cmd)
+        self._new_step = True
+        self._sensordata = None
+        self._time = 0.0
+        self._last_action = np.zeros(self.action_space.shape)
 
-        # self.prev_joint_acceleration = np.zeros(12)
-        # self.prev_joint_velocity = self.init_joint_velocity.flat.copy()
-        # self.prev_joint_cmd = self.init_joint_cmd.flat.copy()
-
-        observation = self._get_obs()
-        return observation
+        return self._get_obs()
 
     def init_sym_structure_param(self):
         self.restructured_feature_dim = 16

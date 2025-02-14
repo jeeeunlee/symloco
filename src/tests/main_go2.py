@@ -29,14 +29,26 @@ from src.mygym.envs.mujoco import unitree_go2  # noqa: F401, E402
 
 SB3_ALGO = "PPO"
 LOGGING_KEYS = [
-    ("reward/run", "reward_run"),
-    ("reward/ctrl", "reward_ctrl"),
-    ("reward/balance", "reward_balance"),
-    ("reward/smooth", "reward_smooth"),
-    ("reward/safety", "reward_safety"),
-    ("train/command_x", "command_x"),
-    ("train/command_ry", "command_ry"),
-    ("train/command_z", "command_z"),
+    ("state/x", "pos_x"),
+    ("state/y", "pos_y"),
+    ("state/z", "pos_z"),
+    ("state/v_x", "vel_x"),
+    ("state/v_y", "vel_y"),
+    ("state/v_z", "vel_z"),
+    ("state/w_x", "w_x"),
+    ("state/w_y", "w_y"),
+    ("state/w_z", "w_z"),
+    ("reward/total", "reward"),
+    ("reward/lin_vel", "reward_lin_vel"),
+    ("reward/rot_vel", "reward_rot_vel"),
+    ("reward/height", "reward_z"),
+    ("reward/pose", "reward_pose"),
+    ("reward/action_rate", "reward_action_rate"),
+    ("reward/vertical_velocity", "reward_vel_z"),
+    ("reward/stability", "reward_stability"),
+    ("command/v_x", "command_x"),
+    ("command/v_y", "command_y"),
+    ("command/w_z", "command_wz"),
 ]
 
 
@@ -58,14 +70,14 @@ def train(
         env,
         verbose=True,
         device="cuda",
-        policy_kwargs={"env": env.envs[0]},
+        policy_kwargs={"env": env.envs[0]} if use_sym_policy else {},
     )
     _train(
         model,
         SB3_ALGO,
         model_name=model_name,
-        n_timesteps=10000,
-        max_iters=200,
+        n_timesteps=6144,
+        max_iters=100000,
         logging_keys=LOGGING_KEYS,
     )
 

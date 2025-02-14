@@ -21,7 +21,7 @@ class RewardLoggerCallback(BaseCallback):
     def _on_step(self) -> bool:
         info = self.locals["infos"][-1]
 
-        for name, k in self.scalars:
+        for name, k in self._scalars:
             self.writer.add_scalar(name, info[k], self.num_timesteps)
 
         # self.writer.add_scalar("reward/run", info["reward_run"], self.num_timesteps)

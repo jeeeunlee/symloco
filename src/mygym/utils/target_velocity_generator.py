@@ -11,8 +11,13 @@ DEFAULT_VELOCITY_PROFILE = {
 
 
 class TargetVelocityGenerator(ABC):
-    def __init__(self, dim):
+    def __init__(self, dim: int, freq: float, mag: float):
+        assert len(freq) == dim and len(mag) == dim, (
+            "Frequency and magnitude lists must match the dimension."
+        )
         self.dim = dim
+        self.freq = freq
+        self.mag = mag
         self.velocity = np.array([0] * self.dim)
 
     @abstractmethod
@@ -29,12 +34,7 @@ class SinusoidalVelocityGenerator(TargetVelocityGenerator):
         freq=DEFAULT_VELOCITY_PROFILE["freq"],
         mag=DEFAULT_VELOCITY_PROFILE["mag"],
     ):
-        super().__init__(dim)
-        assert len(freq) == dim and len(mag) == dim, (
-            "Frequency and magnitude lists must match the dimension."
-        )
-        self.freq = freq
-        self.mag = mag
+        super().__init__(dim, freq, mag)
 
     def get_target_velocity(self, t: float) -> np.ndarray:
         self.velocity = np.array(
@@ -52,14 +52,12 @@ class BiasedSinusoidalVelocityGenerator(TargetVelocityGenerator):
         dim,
         freq=DEFAULT_VELOCITY_PROFILE["freq"],
         mag=DEFAULT_VELOCITY_PROFILE["mag"],
-        bias=DEFAULT_VELOCITY_PROFILE["mag"],
+        bias=None,
     ):
-        super().__init__(dim)
-        assert len(freq) == dim and len(mag) == dim, (
-            "Frequency and magnitude lists must match the dimension."
-        )
-        self.freq = freq
-        self.mag = mag
+        super().__init__(dim, freq, mag)
+        if bias is None:
+            bias = mag
+        assert len(bias) == dim, "Bias list must match the dimension."
         self.bias = bias
 
     def get_target_velocity(self, t: float) -> np.ndarray:

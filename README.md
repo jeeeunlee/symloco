@@ -44,6 +44,7 @@ For training, the full list of arguments is:
 --model_name (-n): name of the model (required)
 --n_envs (-e): number of environments to train with (default is 16)
 --use_sym_policy (-s): whether to use the symmetric policy (default is false)
+--velocity_profile (-v): "oneway" or "bothway" (default is "oneway")
 ```
 
 ### Testing
@@ -57,6 +58,7 @@ For testing, the full list of arguments is:
 ```
 --model_path (-mp): path of model to test (required)
 --n_envs (-e): number of environments to test with (default is 16)
+--velocity_profile (-v): "oneway" or "bothway" (default is "oneway")
 ```
 
 *Note: `main_cheetah.py` is currently the only file that has been maintained. Adjustments may need to be made to main_go2 and main_a1 in order to use some of the above CLI arguments*
