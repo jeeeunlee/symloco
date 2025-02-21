@@ -166,9 +166,9 @@ def make_sym_value_network(
 
 
 def make_sym_ppo_networks(
-    env_name: str,  # used for recovering restruct_feature_fn and destruct_actions_fn
     observation_size: types.ObservationSize,
     action_size: int,
+    env_name: str,  # used for recovering restruct_feature_fn and destruct_actions_fn
     restructured_feature_dim: int,
     restructured_action_dim: int,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
