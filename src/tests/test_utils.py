@@ -2,6 +2,7 @@ import os
 import shutil
 from time import sleep
 import argparse
+from argparse import ArgumentTypeError as err
 from typing import Any
 
 from stable_baselines3.common.vec_env import VecEnv
@@ -10,6 +11,64 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.callbacks import BaseCallback
 from torch.utils.tensorboard import SummaryWriter
+
+
+class PathType(object):
+    def __init__(self, exists=True, type="file", dash_ok=True):
+        """exists:
+             True: a path that does exist
+             False: a path that does not exist, in a valid parent directory
+             None: don't care
+        type: file, dir, symlink, None, or a function returning True for valid paths
+             None: don't care
+        dash_ok: whether to allow "-" as stdin/stdout"""
+
+        assert exists in (True, False, None)
+        assert type in ("file", "dir", "symlink", None) or hasattr(type, "__call__")
+
+        self._exists = exists
+        self._type = type
+        self._dash_ok = dash_ok
+
+    def __call__(self, string):
+        if string == "-":
+            # the special argument "-" means sys.std{in,out}
+            if self._type == "dir":
+                raise err("standard input/output (-) not allowed as directory path")
+            elif self._type == "symlink":
+                raise err("standard input/output (-) not allowed as symlink path")
+            elif not self._dash_ok:
+                raise err("standard input/output (-) not allowed")
+        else:
+            e = os.path.exists(string)
+            if self._exists:
+                if not e:
+                    raise err("path does not exist: '%s'" % string)
+
+                if self._type is None:
+                    pass
+                elif self._type == "file":
+                    if not os.path.isfile(string):
+                        raise err("path is not a file: '%s'" % string)
+                elif self._type == "symlink":
+                    if not os.path.symlink(string):
+                        raise err("path is not a symlink: '%s'" % string)
+                elif self._type == "dir":
+                    if not os.path.isdir(string):
+                        raise err("path is not a directory: '%s'" % string)
+                elif not self._type(string):
+                    raise err("path not valid: '%s'" % string)
+            else:
+                if not self._exists and e:
+                    raise err("path exists: '%s'" % string)
+
+                p = os.path.dirname(os.path.normpath(string)) or "."
+                if not os.path.isdir(p):
+                    raise err("parent path is not a directory: '%s'" % p)
+                elif not os.path.exists(p):
+                    raise err("parent directory does not exist: '%s'" % p)
+
+        return string
 
 
 class RewardLoggerCallback(BaseCallback):
@@ -35,6 +94,29 @@ class RewardLoggerCallback(BaseCallback):
         # )
 
         return True
+
+
+def get_brax_args(prog_name: str) -> dict[str, Any]:
+    parser = argparse.ArgumentParser(prog=prog_name)
+    parser.add_argument("mode", choices=["train", "test"])
+    parser.add_argument("-n", "--run_name", type=str)
+    parser.add_argument("-s", "--use_sym_policy", action="store_true")
+    parser.add_argument("-c", "--checkpoint_name", type=str)
+    return parser.parse_args()
+    # parser = argparse.ArgumentParser(prog=prog_name)
+    # parser.add_argument("-n", "--run_name", type=str, required=True)
+    # subparsers = parser.add_subparsers(help="subcommand help")
+
+    # train = subparsers.add_parser(
+    #     "train", description="Train a locomotion policy", help="train help"
+    # )
+    # train.add_argument("-s", "--use_sym_policy", action="store_true")
+
+    # test = subparsers.add_parser(
+    #     "test", description="Test a trained policy", help="test help"
+    # )
+    # test.add_argument("-c", "--checkpoint_name", type=str, required=True)
+    # return parser.parse_args()
 
 
 def get_args(prog_name: str) -> dict[str, Any]:

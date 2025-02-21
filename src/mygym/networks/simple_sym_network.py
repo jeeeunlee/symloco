@@ -31,8 +31,10 @@ def make_mlp_model(input_dim: int, latent_size: int, num_layer: int, nameadd: st
         # input_dim = latent_size
     return nn.Sequential(layers_dict)
 
-class Aggregator():
+
+class Aggregator:
     """agg"""
+
     def __init__(self, aggregator=th.sum):
         self._aggregator = aggregator
 

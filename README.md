@@ -18,7 +18,7 @@ cuda 12.1 example:
 > Build cuda_12.1.r12.1/compiler.32688072_0
 
 Then, you can create python virtual env and install pytorch, stable-baseline3, gymnasium, etc.
-```
+```bash
 conda create -n "symloco" python=3.11 -y
 conda activate symloco -y
 conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=12.1 -c pytorch -c nvidia
@@ -26,6 +26,22 @@ pip install stable-baselines3[extra]
 pip install gymnasium[mujoco]
 conda install -y -c conda-forge tensorboard
 conda install -y -c conda-forge scipy
+```
+
+## Dependencies for GPU: Brax, Mujoco Playground, and others
+
+Note: we install brax from Github (instead of from pip) because easily saving checkpoint files is currently an unreleased feature.
+
+```bash
+pip install -Uq "jax[cuda]"
+pip install mujoco_mjx
+cd dependencies
+git clone https://github.com/google/brax.git
+cd brax
+pip install -e
+cd ../../
+pip install playground
+pip install tqdm
 ```
 
 ## Training and Testing
@@ -40,25 +56,40 @@ python src/tests/main_<robot>.py train -n <model_name> -s
 ```
 
 For training, the full list of arguments is:
-```
+```bash
 --model_name (-n): name of the model (required)
 --n_envs (-e): number of environments to train with (default is 16)
 --use_sym_policy (-s): whether to use the symmetric policy (default is false)
 --velocity_profile (-v): "oneway" or "bothway" (default is "oneway")
 ```
 
+For training on GPU, the argument list is:
+```bash
+--run_name (-n): name of the run to train (required)
+--use_sym_policy (-s): whether to use the symmetric policy (default is false)
+```
+
 ### Testing
 
-Test a model using the following command:
+Test a model using the following command (on CPU):
 ```bash
 python src/tests/main_<robot>.py test --model-path models/<model_name>/<model_file>.zip
 ```
 
 For testing, the full list of arguments is:
-```
+```bash
 --model_path (-mp): path of model to test (required)
 --n_envs (-e): number of environments to test with (default is 16)
 --velocity_profile (-v): "oneway" or "bothway" (default is "oneway")
 ```
 
-*Note: `main_cheetah.py` is currently the only file that has been maintained. Adjustments may need to be made to main_go2 and main_a1 in order to use some of the above CLI arguments*
+For testing on GPU, the argument list is:
+```bash
+--run_name (-n): name of the run to test (required)
+--checkpoint_name (-c): name of checkpoint folder in models/<run_name> (required)
+```
+
+For example:
+```bash
+python src/tests/main_<robot>.py test -n playground_run -c 000022282240
+```
